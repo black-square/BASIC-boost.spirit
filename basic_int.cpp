@@ -2,7 +2,7 @@
 #include <boost/config/warning_disable.hpp>
 #include <boost/spirit/home/x3.hpp>
 #include <boost/spirit/home/x3/support/ast/variant.hpp>
-#include <boost/fusion/include/adapt_struct.hpp>
+#include <boost/fusion/adapted/std_tuple.hpp>
 
 #include <iostream>
 #include <string>
@@ -26,6 +26,9 @@ namespace client
     {
         using x3::uint_;
         using x3::char_;
+        using x3::lit;
+        using boost::fusion::at_c;
+        using str_view = boost::iterator_range<std::string_view::const_iterator>;
 
         x3::rule<class mult_div, int> const mult_div( "mult_div" );
         x3::rule<class exponent, int> const exponent( "exponent" );
@@ -34,6 +37,8 @@ namespace client
         x3::rule<class relational, int> const relational( "relational" );
         x3::rule<class log_and, int> const log_and( "log_and" );
         x3::rule<class log_or, int> const log_or( "log_or" );
+        x3::rule<class double_args, std::tuple<int, int>> const double_args( "double_args" );
+        x3::rule<class identifier, std::string> const identifier( "identifier" );
 
         const auto cpy_op = []( auto& ctx ) { _val( ctx ) = _attr( ctx ); };
         const auto add_op = [](auto & ctx){ _val(ctx) += _attr(ctx); };
@@ -53,16 +58,35 @@ namespace client
 
         const auto and_op =        []( auto& ctx ) { _val( ctx ) = _val( ctx ) && _attr( ctx ); };
         const auto or_op =         []( auto& ctx ) { _val( ctx ) = _val( ctx ) || _attr( ctx ); };
+        const auto test_op =       []( auto& ctx ) {
+           const auto[o1, o2] = _attr( ctx );
+            _val( ctx ) = o1 + o2;
+        };
+
+        const auto array_acc_op = []( auto& ctx ) {
+            const auto &v = _attr( ctx );
+            const auto &s = at_c<0>( v );
+            const auto [o1, o2] = at_c<1>(v);
+            std::cout << s <<'[' << o1 << ',' << o2 << ']' << std::endl;
+            _val( ctx ) = o1 * o2;
+        };
 
         auto const expression =
             log_or;
 
+        auto const identifier_def = x3::raw[ x3::lexeme[(x3::alpha |  '_') >> *(x3::alnum | '_' )]];
+
+        auto const double_args_def =
+            '(' >> expression >> ',' >> expression >> ')';
+            
         auto const term_def =
             uint_[cpy_op]
              | '(' >> expression[cpy_op] >> ')'
              | ('-' >> term[neg_op])
              | ('+' >> term[cpy_op])
              | ("not" >> term[not_op])
+             | ("sum" >> double_args[test_op])
+             | (identifier >> double_args)[array_acc_op]
             ;
 
         auto const exponent_def =
@@ -85,11 +109,11 @@ namespace client
         auto const relational_def =
             add_sub[cpy_op] >> *(
                 ('=' >> add_sub[eq_op]) |
-                ('<' >> char_('>') >> add_sub[not_eq_op]) |
+                ('<' >> lit('>') >> add_sub[not_eq_op]) |
                 ('<' >> add_sub[less_op]) |
                 ('>' >> add_sub[greater_op]) |
-                ('<' >> char_('=') >> add_sub[less_eq_op]) |
-                ('>' >> char_('=') >> add_sub[greater_eq_op])
+                ('<' >> lit('=') >> add_sub[less_eq_op]) |
+                ('>' >> lit('=') >> add_sub[greater_eq_op])
             );
 
         auto const log_and_def =
@@ -102,7 +126,7 @@ namespace client
                 "or" >> log_and[or_op]
             );
 
-        BOOST_SPIRIT_DEFINE( exponent, mult_div, term, add_sub, relational, log_and, log_or );
+        BOOST_SPIRIT_DEFINE( exponent, mult_div, term, add_sub, relational, log_and, log_or, double_args, identifier );
 
         const auto calculator = expression;
     }
