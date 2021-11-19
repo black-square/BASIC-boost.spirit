@@ -59,6 +59,19 @@ namespace client
         return os;
     }
 
+    using linenum_t = unsigned long long;
+
+    struct runtime_tag;
+
+    class Runtime
+    {
+    public:
+        void AddLine( linenum_t line, std::string_view str )
+        {
+            std::cout << line << "\t\t" << str << std::endl;
+        }
+    };
+
     namespace operations
     {
         using boost::fusion::at_c;
@@ -246,15 +259,15 @@ namespace client
         x3::rule<class identifier, std::string> const identifier( "identifier" );
 
 
-        auto const expression =
+        const auto expression =
             log_or;
 
-        auto const identifier_def = x3::raw[ x3::lexeme[(x3::alpha |  '_') >> *(x3::alnum | '_' )]];
+        const auto identifier_def = x3::raw[ x3::lexeme[(x3::alpha |  '_') >> *(x3::alnum | '_' )]];
 
-        auto const double_args_def =
+        const auto double_args_def =
             '(' >> expression >> ',' >> expression >> ')';
             
-        auto const term_def =
+        const auto term_def =
             strict_float[cpy_op]      
              | int_[cpy_int_op]
              | x3::lexeme['"' >> *~char_('"') >> '"'][cpy_op]
@@ -266,24 +279,24 @@ namespace client
              | (identifier >> double_args)[array_acc_op]
             ;
 
-        auto const exponent_def =
+        const auto exponent_def =
             term[cpy_op] >> *(
                 ('^' >> term[exp_op])
             );
 
-        auto const mult_div_def =
+        const auto mult_div_def =
             exponent[cpy_op] >> *(
                 ('*' >> exponent[mul_op]) |
                 ('/' >> exponent[div_op])
              );
 
-        auto const add_sub_def =
+        const auto add_sub_def =
             mult_div[cpy_op] >> *(
                 ('+' >> mult_div[add_op]) |
                 ('-' >> mult_div[sub_op])
             );
 
-        auto const relational_def =
+        const auto relational_def =
             add_sub[cpy_op] >> *(
                 ('=' >> add_sub[eq_op]) |
                 ('<' >> lit('>') >> add_sub[not_eq_op]) |
@@ -293,12 +306,12 @@ namespace client
                 ('>' >> lit('=') >> add_sub[greater_eq_op])
             );
 
-        auto const log_and_def =
+        const auto log_and_def =
             relational[cpy_op] >> *( 
                 no_case["and"] >> relational[and_op]
             );
 
-        auto const log_or_def =
+        const auto log_or_def =
             log_and[cpy_op] >> *(
                 no_case["or"] >> log_and[or_op]
             );
@@ -308,8 +321,41 @@ namespace client
         const auto calculator = expression;
     }
 
-    using grammar::calculator;
+    namespace preparse_operations
+    {
+        constexpr auto add_num_line = []( auto& ctx ) 
+        {
+            auto& runtime = x3::get<runtime_tag>( ctx ).get();
+            const auto [line, str] = _attr( ctx );
 
+            runtime.AddLine( line, str );  
+        };
+    }
+
+    namespace preparse_grammar
+    {
+        using namespace preparse_operations;
+
+        using x3::char_;
+        using x3::ulong_long;
+
+        x3::rule<class line> const line( "line" );
+        x3::rule<class num_line, std::tuple<linenum_t, std::string>> const num_line( "num_line" );
+
+        const auto preparser = line;
+
+        const auto num_line_def = 
+            x3::ulong_long >> x3::lexeme[+char_];
+
+        const auto line_def =
+            num_line[add_num_line]
+            ;
+
+        BOOST_SPIRIT_DEFINE( line, num_line );
+    }
+
+    using grammar::calculator;
+    using preparse_grammar::preparser;
 }
 
 namespace client // Enables ADL for these methods for BOOST_TEST
@@ -394,15 +440,11 @@ BOOST_AUTO_TEST_CASE( simple_calc )
 
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//  Main program
-///////////////////////////////////////////////////////////////////////////////
-int main(int argc, char* argv[])
+
+void InteractiveMode()
 {
     using namespace client;
 
-    boost::unit_test::unit_test_main( init_unit_test, argc, argv );
-    
     std::cout << "/////////////////////////////////////////////////////////\n\n";
     std::cout << "Expression parser...\n\n";
     std::cout << "/////////////////////////////////////////////////////////\n\n";
@@ -452,7 +494,62 @@ int main(int argc, char* argv[])
             std::cout << "-------------------------\n";
         }
     }
+}
 
-    std::cout << "Bye... :-) \n\n";
+///////////////////////////////////////////////////////////////////////////////
+//  Main program
+///////////////////////////////////////////////////////////////////////////////
+int main(int argc, char* argv[])
+{
+    boost::unit_test::unit_test_main( init_unit_test, 1, argv );
+
+    if( argc != 2 )
+    {
+        InteractiveMode();
+        return 0;
+    }
+    
+    using boost::spirit::x3::with;
+
+    std::ifstream flIn{ argv[1] };
+
+    std::string str;
+    
+    client::Runtime runtime;
+
+    auto && parser = with<client::runtime_tag>( std::ref( runtime ) )[ 
+        client::preparser 
+    ];
+
+    while( std::getline( flIn, str ) )
+    {
+        auto iter = str.begin();
+        auto end = str.end();
+        boost::spirit::x3::ascii::space_type space;
+
+        bool r = false;
+        std::string err{};
+
+        try
+        {
+            r = phrase_parse( iter, end, parser, space );
+        }
+        catch( const std::runtime_error& e )
+        {
+            err = e.what();
+        }
+
+        if( !r || iter != end )
+        {
+            std::string rest( iter, end );
+            std::cout << "-------------------------\n";
+            std::cout << "Parsing failed " << err << "\n";
+            std::cout << "stopped at: \"" << rest << "\"\n";
+            std::cout << "-------------------------\n";
+
+            break;
+        }
+    }
+
     return 0;
 }
