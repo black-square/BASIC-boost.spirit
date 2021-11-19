@@ -12,7 +12,7 @@
 120 IF CH<1 THEN CH=0 ELSE IF RND(1)>.84 THEN CH=CH-1
 130 IF DE<1 THEN DE=0 ELSE IF RND(1)>.84 THEN DE=DE-1
 140 IF IT<1 THEN IT=0 ELSE IF RND(1)>.84 THEN IT=IT-1
-150 IF WI<1 THEN WI=0 ELSE IF RND(1)>.R4 THEN WI=WI-1
+150 IF WI<1 THEN WI=0 ELSE IF RND(1)>.84 THEN WI=WI-1
 160 IF CO<1 THEN CO=0 ELSE IF RND(1)>.84 THEN CO=CO-1
 170 IF RND(1)>.84 AND RO=16 AND A(RO,8)=1 THEN PRINT:PRINT "You hear a whispered voice warning you:":PRINT "'You must do something about the dwarf'"
 180 PRINT:PRINT "Your attributes are:"
@@ -54,7 +54,7 @@
 540 IF B$="STA" OR B$="KIL" OR B$="FIG" OR B$="KIC" OR B$="PUN" OR B$="SLA" OR B$="ATT" THEN KW=1:GOSUB 1400
 550 IF A(RO,7)>98 AND B$<>"UNL" THEN PRINT TAB(4);"** The doors are locked **":GOTO 40
 560 IF B$="STA" OR B$="KIL" OR B$="FIG" OR B$="KIC" OR B$="PUN" OR B$="SLA" OR B$="ATT" THEN KW=1:GOSUB 1400
-570 IF B$="GO " OR B$="MOV" OR B$="CLI" OR B$="RUN" OR B$='WAL" THEN KW=1:GOSUB 740
+570 IF B$="GO " OR B$="MOV" OR B$="CLI" OR B$="RUN" OR B$="WAL" THEN KW=1:GOSUB 740
 580 IF B$="TAK" OR B$="GET" OR B$="STE" OR B$="LIF" THEN KW=1:GOSUB 950
 590 IF B$="DRO" OR B$="PUT" OR B$="THR" OR B$="BRE" THEN KW=1:GOSUB 1160
 600 IF B$="UNL" THEN KW=1:GOSUB 2360
@@ -406,7 +406,7 @@
 4070 PRINT "There is a stone archway to the north,"
 4080 PRINT "You are in a very long room."
 4090 PRINT:PRINT "Fresh air blows down some stairs"
-4100 PRINT "and rich red drapes cover
+4100 PRINT "and rich red drapes cover"
 4110 PRINT "the walls...You can see doors"
 4120 PRINT "to the south and east"
 4130 RETURN
@@ -681,7 +681,7 @@
 6820 IF INKEY$<>"" THEN 6820
 6830 N=0
 6840 PRINT "PRESS ANY KEY TO START THE ADVENTURE"
-6850 IF INKEYS="" THEN N=N+1:GOTO 6850
+6850 IF INKEY$="" THEN N=N+1:GOTO 6850
 6860 RANDOMIZE N
 6870 CLS
 6880 PRINT:PRINT "Please stand by..."
