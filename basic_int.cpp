@@ -4,6 +4,8 @@
 #include <boost/spirit/home/x3/support/ast/variant.hpp>
 #include <boost/fusion/adapted/std_tuple.hpp>
 
+#include <boost/algorithm/string/replace.hpp>
+
 #include <iostream>
 #include <string>
 #include <list>
@@ -25,8 +27,8 @@ namespace client
     using str_t = std::string;
 
     struct value_t : x3::variant<
-        float_t,
         int_t,
+        float_t,
         str_t
     >
     {
@@ -50,12 +52,18 @@ namespace client
         {
             void operator()( float_t v ) const { os << v << 'f'; }
             void operator()( int_t v ) const { os << v << 'i'; }
-            void operator()( const str_t& v ) const { os << '"' << v << '"'; }
+            void operator()( str_t v ) const 
+            { 
+                boost::replace_all( v, "\n", "\\n" );
+                boost::replace_all( v, "\t", "\\t" );
+                boost::replace_all( v, "\r", "\\r" );
+                os << '"' << v << '"'; 
+            }
 
             std::ostream& os;
         };
-        
-        boost::apply_visitor(Visitor{os}, v);
+
+        boost::apply_visitor( Visitor{ os }, v );
 
         return os;
     }
@@ -64,7 +72,29 @@ namespace client
 
     struct runtime_tag;
 
-    class Runtime
+    class RuntimeBase
+    {
+    public:
+        void Assign( const std::string& name, const value_t& val )
+        {
+            mVars[name] = val;
+        }
+
+        value_t Read( const std::string& name )
+        {
+            return mVars[name];
+        }
+
+        void Clear()
+        {
+            mVars.clear();
+        }
+
+    private:
+        std::unordered_map<std::string, value_t> mVars;
+    };
+
+    class Runtime: public RuntimeBase
     {
     public:
         void AddLine( linenum_t line, std::string_view str )
@@ -86,19 +116,14 @@ namespace client
             return &it->second;
         }
 
-        void Assign( const std::string &name, const value_t& val )
+        template<class T>
+        void Print( T && val ) const
         {
-            mVars[name] = val;
-        }
-
-        value_t Read( const std::string& name )
-        {
-            return mVars[name];
+            std::cout << val;
         }
 
     private:
         std::map<linenum_t, std::string> mProgram;
-        std::unordered_map<std::string, value_t> mVars;
         linenum_t mCurLine = 0;
     };
 
@@ -267,7 +292,8 @@ namespace client
 
         constexpr auto print_op = []( auto& ctx ) 
         {
-            boost::apply_visitor( [](auto&& v){ std::cout << v; }, _attr( ctx ) );
+            auto& runtime = x3::get<runtime_tag>( ctx ).get();
+            boost::apply_visitor( [&runtime](auto&& v) { runtime.Print(v); }, _attr( ctx ) );
         };
 
         constexpr auto assing_var_op = []( auto& ctx ) {
@@ -295,6 +321,7 @@ namespace client
         using x3::lit;
         using x3::no_case;
         using x3::attr;
+        using x3::eoi;
         
         using str_view = boost::iterator_range<std::string_view::const_iterator>;
 
@@ -307,25 +334,37 @@ namespace client
         x3::rule<class log_or, value_t> const log_or( "log_or" );
         x3::rule<class double_args, std::tuple<value_t, value_t>> const double_args( "double_args" );
         x3::rule<class identifier, std::string> const identifier( "identifier" );
-        x3::rule<class instruction, x3::unused_type> const instruction( "instruction" );
-        x3::rule<class line_parser, x3::unused_type> const line_parser( "line_parser" );
+        x3::rule<class instruction, value_t> const instruction( "instruction" );
+        x3::rule<class line_parser, value_t> const line_parser( "line_parser" );
+
+        const auto expression =
+            log_or;
 
         const auto line_parser_def =
             instruction % ':';
 
-        const auto expression =
-            log_or;
+        const auto instruction_end = 
+            ':' | eoi;
+
+        const auto print_comma = 
+            ',' >> attr( value_t{ "\t" } )[print_op];
+
+        const auto print_arg = 
+            +(+print_comma | expression[print_op]);
+
+        const auto print_instruction =
+            (no_case["print"] >> print_arg >> *(';' >> print_arg) >> (
+                ';' |
+                (&instruction_end >> attr( value_t{ "\n" } )[print_op])       
+            )) |
+            no_case["print"] >> attr( value_t{ "\n" } )[print_op];
 
         const auto instruction_def =
             (identifier >> '=' >> expression)[assing_var_op] |
             no_case["text"] |
             no_case["home"] |            
-            (no_case["print"] >> 
-                    +(expression[print_op] | 
-                    (lit( ',' ) >> attr(value_t{"\t"})[print_op]) | 
-                    ';') >> attr(value_t{"\n"})[print_op])
+            print_instruction
         ;
-
 
         const auto identifier_def = x3::raw[ x3::lexeme[(x3::alpha |  '_') >> *(x3::alnum | '_' )] ];
 
@@ -364,7 +403,7 @@ namespace client
 
         const auto relational_def =
             add_sub[cpy_op] >> *(
-                ('=' >> add_sub[eq_op]) |
+                ((lit("==") | '=') >> add_sub[eq_op]) |
                 ('<' >> lit('>') >> add_sub[not_eq_op]) |
                 ('<' >> add_sub[less_op]) |
                 ('>' >> add_sub[greater_op]) |
@@ -442,17 +481,51 @@ namespace client // Enables ADL for these methods for BOOST_TEST
     }
 }
 
-BOOST_AUTO_TEST_CASE( simple_calc )
+class TestRuntime : public client::RuntimeBase
 {
-    using namespace client;
+public:
+    template<class T>
+    void Print( T&& val )
+    {
+        mStrOut << val;
+    }
 
-    static const auto calc = []( std::string_view str )
+    void Clear()
+    {
+        RuntimeBase::Clear();
+        ClearOutput();
+    }
+    
+    void ClearOutput()
+    {
+        mStrOut.str( "" );
+    }
+
+    std::string GetOutput() const
+    {
+        return mStrOut.str();
+    }
+
+private:
+    std::stringstream mStrOut;
+};
+
+template<class GrammarT>
+struct TestExecutor
+{
+    TestExecutor(GrammarT &grammar):
+        grammar{grammar}
+    {}
+
+    auto operator()( std::string_view str )
     {
         using boost::spirit::x3::with;
-        client::Runtime runtime;
+        using client::value_t;
 
-        auto&& calc = with<client::runtime_tag>( std::ref( runtime ) )[
-            client::calculator
+        runtime.ClearOutput();
+
+        auto&& exec = with<client::runtime_tag>( std::ref( runtime ) )[
+            grammar
         ];
 
         value_t res{};
@@ -466,7 +539,7 @@ BOOST_AUTO_TEST_CASE( simple_calc )
 
         try
         {
-            r = phrase_parse( iter, end, calc, space, res );
+            r = phrase_parse( iter, end, exec, space, res );
         }
         catch( const std::runtime_error& e )
         {
@@ -474,11 +547,37 @@ BOOST_AUTO_TEST_CASE( simple_calc )
         }
 
         if( !r || iter != end )
-            return value_t{"ERROR: " + err};
+        {
+            std::string rest( iter, end );
+            return value_t{ "ERROR [" + err + "] \\ " + rest };
+        }
 
-        return res;
-    };
+        auto && strOut = runtime.GetOutput();
 
+        return strOut.empty() || res != value_t{} ? res : value_t{ strOut };
+    }
+
+    const GrammarT &grammar;
+    TestRuntime runtime;
+};
+
+template<class GrammarT>
+struct TestExecutorClear : TestExecutor<GrammarT>
+{
+    using TBase = TestExecutor<GrammarT>;
+    using TBase::TestExecutor;
+    using TBase::runtime;
+
+    auto operator()( std::string_view str )
+    {
+        runtime.Clear();
+        return TBase::operator()( str );
+    }
+};
+
+BOOST_AUTO_TEST_CASE( expression )
+{
+    TestExecutorClear calc{client::calculator};
 
     BOOST_TEST( calc( "3+4" ) == 7.f );
     BOOST_TEST( calc( "3+4*2" ) == 11.f );
@@ -497,6 +596,7 @@ BOOST_AUTO_TEST_CASE( simple_calc )
 
     BOOST_TEST( calc( "1 + not 2^3 + 4" ) == 5.f );
     BOOST_TEST( calc( "2 + 3 = 3 - 1 * -2" ) == 1 );
+    BOOST_TEST( calc( "2 + (1+1+1) == 3 - 1 * -2" ) == 1 );
     BOOST_TEST( calc( "1 < 2 and 2 < 10" ) == 1 );
     BOOST_TEST( calc( "3+(4*2) + 3 = (3+4)*2" ) == 1 );
     BOOST_TEST( calc( "1 <= 1" ) == 1 );
@@ -509,68 +609,45 @@ BOOST_AUTO_TEST_CASE( simple_calc )
     BOOST_TEST( calc( "1 > = 2" ) == 0 );
 
     BOOST_TEST( calc( R"(("a " + "b")+" c")") == "a b c" );
-
 }
 
+BOOST_AUTO_TEST_CASE( line_parser )
+{
+    TestExecutorClear calc{ client::line_parser };
+
+    BOOST_TEST( calc( R"(print)" ) == "\n" );
+    BOOST_TEST( calc( R"(Print "Hello World!")" ) == "Hello World!\n" );
+    BOOST_TEST( calc( R"(Print "Hello World!" ; )" ) == "Hello World!" );
+    BOOST_TEST( calc( R"(print 1+1;)" ) == "2" );
+    BOOST_TEST( calc( R"(print "Test": print 42 ;)" ) == "Test\n42" );
+    BOOST_TEST( calc( R"(xvar3 = 37 : print "X: "; 2 + xvar3 + 3)" ) == "X: 42\n" );
+    BOOST_TEST( calc( R"(xvar3 = 37 : print "X: "; : print 2 + xvar3 + 3)" ) == "X: 42\n" );
+    BOOST_TEST( calc( R"(print "t", 2+45 ;:print "!!!";)" ) == "t\t47!!!" );
+    BOOST_TEST( calc( R"(print ,"t",,;)" ) == "\tt\t\t" );
+    BOOST_TEST( calc( R"(print ,,,"t",, 2+45,""; "ab" + "cd";)" ) == "\t\t\tt\t\t47\tabcd" );   
+}
 
 void InteractiveMode()
 {
     using namespace client;
     using boost::spirit::x3::with;
 
-    std::cout << "/////////////////////////////////////////////////////////\n\n";
-    std::cout << "Expression parser...\n\n";
-    std::cout << "/////////////////////////////////////////////////////////\n\n";
     std::cout << "Type an expression...or [q or Q] to quit\n\n";
 
-    typedef std::string::const_iterator iterator_type;
-
+    TestExecutor calc{ client::line_parser };
 
     std::string str;
-    while( std::getline( std::cin, str ) )
+
+    for(;;)
     {
-        if( str.empty() || str[0] == 'q' || str[0] == 'Q' )
+        std::cout << ">>> ";
+
+        if( !std::getline( std::cin, str ) || str.empty() || str[0] == 'q' || str[0] == 'Q' )
             break;
 
-        client::Runtime runtime;
+        const auto res = calc(str);
 
-        auto&& calc = with<client::runtime_tag>( std::ref( runtime ) )[
-            client::calculator
-        ];
-
-        value_t res{};
-
-        iterator_type iter = str.begin();
-        iterator_type end = str.end();
-        boost::spirit::x3::ascii::space_type space;
-
-        bool r = false;
-        std::string err{};
-
-        try
-        {
-            r = phrase_parse( iter, end, calc, space, res );
-        }
-        catch( const std::runtime_error& e )
-        {
-            err = e.what();
-        }
-
-        if( r && iter == end )
-        {
-            std::cout << "-------------------------\n";
-            std::cout << "Parsing succeeded\n";
-            std::cout << "\nResult: " << res << std::endl;
-            std::cout << "-------------------------\n";
-        }
-        else
-        {
-            std::string rest( iter, end );
-            std::cout << "-------------------------\n";
-            std::cout << "Parsing failed " << err << "\n";
-            std::cout << "stopped at: \"" << rest << "\"\n";
-            std::cout << "-------------------------\n";
-        }
+        std::cout << res << std::endl;
     }
 }
 
