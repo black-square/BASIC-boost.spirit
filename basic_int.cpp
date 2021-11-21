@@ -111,18 +111,21 @@ namespace client
             mProgram.emplace(line, str);
         }
 
-        std::string *GetNextLine()
+        std::tuple<const std::string*, linenum_t> GetNextLine()
         {
             const auto it = mProgram.lower_bound(mCurLine);
 
             if( it == mProgram.end() )
-                return nullptr;
-
-            std::cout << "<" << it->first << "\t\t" << it->second << ">" << std::endl;
+                return {};
 
             mCurLine = it->first + 1;
 
-            return &it->second;
+            return { &it->second, it->first };
+        }
+
+        void Goto( linenum_t line )
+        {
+            mCurLine = line;
         }
 
         template<class T>
@@ -291,6 +294,11 @@ namespace client
             _val( ctx ) = ForseFloat(o1) + ForseFloat(o2);
         };
 
+        constexpr auto sqr_op = []( auto& ctx ) {
+            const auto& v = _attr( ctx );
+            _val( ctx ) = std::sqrt( ForseFloat(v) );
+        };
+
         constexpr auto array_acc_op = []( auto& ctx ) {
             const auto &v = _attr( ctx );
             const auto &s = at_c<0>( v );
@@ -319,7 +327,7 @@ namespace client
             _val( ctx ) = runtime.Read( name );
         };  
         
-        constexpr auto if_statement_op = []( auto& ctx ) {
+        constexpr auto if_stmt_op = []( auto& ctx ) {
             auto&& v = _attr( ctx );
 
             struct Impl
@@ -333,6 +341,12 @@ namespace client
             auto& action = x3::get<partial_parse_action_tag>( ctx ).get();
 
             action = res ? PartialParseAction::Continue : PartialParseAction::Discard;
+        };
+
+        constexpr auto goto_stmt_op = []( auto& ctx ) {
+            auto&& v = _attr( ctx );
+            auto& runtime = x3::get<runtime_tag>( ctx ).get();
+            runtime.Goto( v );
         };
     }
 
@@ -387,11 +401,15 @@ namespace client
             no_case["text"] |
             no_case["home"] |            
             print_instruction |
-            (no_case["if"] >> expression >> no_case["then"] )[if_statement_op] |
+            (no_case["if"] >> expression >> no_case["then"] )[if_stmt_op] |
+            no_case["goto"] >> x3::ulong_long[goto_stmt_op] |
             (-no_case["let"] >> identifier >> '=' >> expression )[assing_var_op]
         ;
 
         const auto identifier_def = x3::raw[ x3::lexeme[(x3::alpha |  '_') >> *(x3::alnum | '_' )] ];
+
+        const auto single_arg =
+            '(' >> expression >> ')';
 
         const auto double_args_def =
             '(' >> expression >> ',' >> expression >> ')';
@@ -401,10 +419,11 @@ namespace client
              | int_[cpy_int_op]
              | x3::lexeme['"' >> *~char_('"') >> '"'][cpy_op]    
              | '(' >> expression[cpy_op] >> ')'
-             | ('-' >> term[neg_op])
-             | ('+' >> term[cpy_op])
+             | '-' >> term[neg_op]
+             | '+' >> term[cpy_op]
              | (no_case["not"] >> term[not_op])
-             | (no_case["sum"] >> double_args[test_op])
+             | no_case["sum"] >> double_args[test_op]
+             | no_case["sqr"] >> single_arg[sqr_op]
              | identifier[read_var_op]
              | (identifier >> double_args)[array_acc_op]
             ;
@@ -464,7 +483,6 @@ namespace client
         };
 
         using x3::char_;
-        using x3::ulong_long;
         using x3::eoi;
 
         x3::rule<class line> const line( "line" );
@@ -506,7 +524,7 @@ namespace client // Enables ADL for these methods for BOOST_TEST
     }
 }
 
-class TestRuntime : public client::RuntimeBase
+class TestRuntime : public client::Runtime
 {
 public:
     template<class T>
@@ -517,7 +535,7 @@ public:
 
     void Clear()
     {
-        RuntimeBase::Clear();
+        Runtime::Clear();
         ClearOutput();
     }
     
@@ -674,6 +692,8 @@ BOOST_AUTO_TEST_CASE( expression_test )
     BOOST_TEST( calc( "1 > = 2" ) == 0 );
 
     BOOST_TEST( calc( R"(("a " + "b")+" c")") == "a b c" );
+
+    BOOST_TEST( calc( "SQR(156.25)" ) == 12.5f );
 }
 
 BOOST_AUTO_TEST_CASE( line_parser_test )
@@ -760,7 +780,7 @@ bool Preparse( const char* szFileName, client::Runtime &runtime )
         {
             std::string rest( iter, end );
             std::cout << "-------------------------\n";
-            std::cout << "Parsing failed " << err << "\n";
+            std::cout << "Preparse failed" << err << "\n";
             std::cout << "stopped at: \"" << rest << "\"\n";
             std::cout << "-------------------------\n";
 
@@ -775,19 +795,25 @@ bool Execute( client::Runtime& runtime )
 {
     using namespace client;
 
-    while( std::string *pStr = runtime.GetNextLine() )
+    for(;;) 
     {
+        const auto [pStr, lineNum] = runtime.GetNextLine();
+
+        if( !pStr )
+            return true;
+
         value_t res{};
         std::string err{};
 
         if( !Parse( *pStr, line_parser, runtime, res, err ) )
         {
-            std::cout << "!!! " << err << std::endl;
+            std::cout << "-------------------------\n";
+            std::cout << "Execute failed\n" << lineNum << '\t' << *pStr << "\n";
+            std::cout << "Error: " << err << "\n";
+            std::cout << "-------------------------\n";
             return false;
         }
     }
-
-    return true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -810,7 +836,7 @@ int main(int argc, char* argv[])
         if( res )
             res = Execute( runtime );
 
-        std::cout << (res ? "[SUCCESS]": "[FAIL]")  << std::endl;
+        std::cout << std::endl << (res ? "[SUCCESS]": "[FAIL]")  << std::endl << std::endl;
     }
 
     InteractiveMode();
