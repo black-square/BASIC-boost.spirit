@@ -1,7 +1,7 @@
 10 text : home
 20 print "Prime numbers"
-30 print " "; 
-40 for x = 1 to 1000
+30 input "Max prime: ";MaxPrime 
+40 for x = 1 to MaxPrime
 50 gosub 1000
 60 if p == 1 then print x;" ";
 70 next

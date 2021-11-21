@@ -6,9 +6,12 @@
 #include <boost/fusion/adapted/std_tuple.hpp>
 
 #include <boost/algorithm/string/replace.hpp>
+#include <boost/algorithm/string/case_conv.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 
 #include <iostream>
 #include <string>
+#include <deque>
 #include <list>
 #include <numeric>
 
@@ -147,13 +150,39 @@ namespace client
     class RuntimeBase
     {
     public:
-        void Assign( const std::string& name, const value_t& val )
+        void Assign( std::string name, value_t val )
         {
-            mVars[name] = val;
+            if( name.empty() )
+                throw std::runtime_error( "variable name cannot be empty" );
+
+            boost::algorithm::to_lower( name );
+
+            value_t res;
+            const str_t* pS = boost::get<str_t>( &val );
+
+            switch( name.back() )
+            {
+                case '$':
+                    if( !pS )
+                        throw std::runtime_error( "Expected String variable" );
+
+                    res = std::move(val);
+                    break;
+
+                case '%':
+                    res = ForseInt( val );
+                    break;
+
+                default:
+                    res = ForseFloat( val );
+            };
+
+            mVars[name] = res;
         }
 
-        value_t Read( const std::string& name )
+        value_t Read( std::string name )
         {
+            boost::algorithm::to_lower( name );
             return mVars[name];
         }
 
@@ -206,13 +235,13 @@ namespace client
             mGosubStack.pop_back();
         }
 
-        void ForLoop( std::string varName, value_t initVal, value_t targetVal )
+        void ForLoop( std::string varName, value_t initVal, value_t targetVal, value_t stepVal )
         {
             Assign( varName, std::move(initVal) );
-            mForLoopStack.push_back({std::move(varName), std::move(targetVal), mCurLine} );
+            mForLoopStack.push_back({std::move(varName), std::move(targetVal), std::move(stepVal), mCurLine} );
         }
 
-        void Next( std::string varName )
+        void Next( const std::string &varName )
         {
             for( ;; )
             {
@@ -227,7 +256,7 @@ namespace client
 
             auto &cur = mForLoopStack.back();    
             auto curVal = Read( cur.varName );
-            curVal = AddImpl( curVal, value_t{ int_t{1} } );
+            curVal = AddImpl( curVal, cur.stepVal );
             Assign( cur.varName, curVal );
 
             const int_t eqRes = LessEqImpl( curVal, cur.targetVal );
@@ -244,13 +273,71 @@ namespace client
             std::cout << val;
         }
 
+        void Input( const std::string& prompt, const std::string& name )
+        {
+            if( name.empty() )
+                throw std::runtime_error( "variable name cannot be empty" );
+
+            value_t res;
+            std::string str;
+
+            for( ;; )
+            {
+                std::cout << prompt;
+
+                if( mFakeInput.empty() )
+                {
+                    if( !std::getline( std::cin, str ) )
+                        throw std::runtime_error( "std::getline() error" );
+                }
+                else
+                {
+                    str = std::move(mFakeInput.front());
+                    mFakeInput.pop_front();
+                    std::cout << str << std::endl;
+                }
+
+                const char * const pBeg = str.data();
+                const char * const pEnd = pBeg + str.size();
+                char* pLast = nullptr;
+              
+                switch( name.back() )
+                {
+                case '$':
+                    res = std::move( str );
+                    pLast = const_cast<char*>(pEnd);
+                    break;
+
+                case '%':
+                    res = static_cast<int_t>(std::strtol( pBeg, &pLast, 10 ));
+                    break;
+
+                default:
+                    res = std::strtof( pBeg, &pLast );
+                };
+
+                if( pLast == pEnd )
+                    break;
+
+                std::cout << "?REENTER" << std::endl;
+            } 
+
+            Assign( name, res );
+        }
+
+        void AddFakeInput( std::string str )
+        {
+            mFakeInput.push_back( std::move(str) );
+        }
+
         void Clear()
         {
             RuntimeBase::Clear();
-            mProgram.clear();
-            mCurLine = 0;
+            mProgram.clear();        
             mForLoopStack.clear();
             mGosubStack.clear();
+            mFakeInput.clear();
+            mCurLine = 0;
         } 
 
     private:
@@ -258,6 +345,7 @@ namespace client
         {
             std::string varName;
             value_t targetVal;
+            value_t stepVal;
             linenum_t startBodyLine;
         };
 
@@ -265,6 +353,7 @@ namespace client
         std::map<linenum_t, std::string> mProgram;
         std::vector<ForLoopItem> mForLoopStack;
         std::vector<linenum_t> mGosubStack;
+        std::deque<std::string> mFakeInput;
         linenum_t mCurLine = 0;
     };
 
@@ -456,15 +545,24 @@ namespace client
             auto&& name = at_c<0>( v );
             auto&& initVal = at_c<1>( v );
             auto&& endVal = at_c<2>( v );
+            auto&& step = at_c<3>( v );
             auto& runtime = x3::get<runtime_tag>( ctx ).get();
 
-            runtime.ForLoop( name, initVal, endVal );
+            runtime.ForLoop( name, initVal, endVal, step ? std::move(*step) : value_t{ int_t{1} } );
         };
 
         constexpr auto next_stmt_op = []( auto& ctx ) {
             auto&& v = _attr( ctx );
             auto& runtime = x3::get<runtime_tag>( ctx ).get();
             runtime.Next(v);
+        };
+
+        constexpr auto input_op = []( auto& ctx ) {
+            auto&& v = _attr( ctx );
+            auto&& prompt = at_c<0>( v );
+            auto&& varName = at_c<1>( v );
+            auto& runtime = x3::get<runtime_tag>( ctx ).get();
+            runtime.Input( prompt, varName );
         };
     }
 
@@ -491,12 +589,18 @@ namespace client
         x3::rule<class log_or, value_t> const log_or( "log_or" );
         x3::rule<class double_args, std::tuple<value_t, value_t>> const double_args( "double_args" );
         x3::rule<class identifier, std::string> const identifier( "identifier" );
+        x3::rule<class string_lit, std::string> const string_lit( "string_lit" );
         x3::rule<class instruction, value_t> const instruction( "instruction" );
         x3::rule<class line_parser, value_t> const line_parser( "line_parser" );
         x3::rule<class return_stmt, std::string> const return_stmt( "return_stmt" );
 
         const auto expression =
             log_or;
+
+        const auto quote = char_( '"' ); //MSVC has problems if we inline it.
+
+        const auto string_lit_def =
+            x3::lexeme['"' >> *~quote >> '"'];
 
         const auto line_parser_def =
             instruction % ':';
@@ -510,30 +614,45 @@ namespace client
         const auto print_arg = 
             +(+print_comma | expression[print_op]);
 
-        const auto print_instruction =
+        const auto print_stmt =
             (no_case["print"] >> print_arg >> *(';' >> print_arg) >> (
                 ';' | (&instruction_end >> attr( value_t{ "\n" } )[print_op])       
             )) |
             no_case["print"] >> attr( value_t{ "\n" } )[print_op];
 
+        const auto input_stmt =  
+            no_case["input"] >> 
+                (
+                    (string_lit >> ';' >> identifier)[input_op] |
+                    (attr(std::string{ "?" }) >> identifier)[input_op]
+                ) >>
+                *( (',' >> attr( std::string{"??"} ) >> identifier)[input_op] );
+
         const auto return_stmt_def =
             no_case["next"] >> -identifier;
+
+        const auto for_stmt = 
+            (no_case["for"] >> identifier >> '=' >> expression >> no_case["to"] >> expression >>
+                -(no_case["step"] >> expression)
+            ) [for_stmt_op];
 
         const auto instruction_def =
             no_case["text"] |
             no_case["home"] |            
-            print_instruction |
+            print_stmt |
+            input_stmt |
             (no_case["if"] >> expression >> -no_case["then"] )[if_stmt_op] |
             no_case["goto"] >> x3::ulong_long[goto_stmt_op] |
             no_case["gosub"] >> x3::ulong_long[gosub_stmt_op] |
             no_case["return"][return_stmt_op] |
-            (no_case["for"] >> identifier >> '=' >> expression >> no_case["to"] >> expression)[for_stmt_op] |
+            for_stmt |
             return_stmt[next_stmt_op] |
             no_case["end"][end_stmt_op] |
+            no_case["dim"] >> identifier % ',' |
             (-no_case["let"] >> identifier >> '=' >> expression )[assing_var_op]
         ;
 
-        const auto identifier_def = x3::raw[ x3::lexeme[(x3::alpha |  '_') >> *(x3::alnum | '_' )] ];
+        const auto identifier_def = x3::raw[ x3::lexeme[(x3::alpha |  '_') >> *(x3::alnum | '_' ) >> -(lit('%') | '$') ]];
 
         const auto single_arg =
             '(' >> expression >> ')';
@@ -544,7 +663,7 @@ namespace client
         const auto term_def =
             strict_float[cpy_op]      
              | int_[cpy_int_op]
-             | x3::lexeme['"' >> *~char_('"') >> '"'][cpy_op]    
+             | string_lit[cpy_op]    
              | '(' >> expression[cpy_op] >> ')'
              | '-' >> term[neg_op]
              | '+' >> term[cpy_op]
@@ -594,7 +713,7 @@ namespace client
             );
 
         BOOST_SPIRIT_DEFINE( exponent, mult_div, term, add_sub, relational, log_and, log_or, 
-            double_args, identifier, instruction, line_parser, return_stmt
+            double_args, identifier, string_lit, instruction, line_parser, return_stmt
         );
 
         const auto calculator = expression;
@@ -845,23 +964,28 @@ BOOST_AUTO_TEST_CASE( line_parser_test )
     BOOST_TEST( calc( R"(print ,"t",,;)" ) == "\tt\t\t" );
     BOOST_TEST( calc( R"(print ,,,"t",, 2+45,""; "ab" + "cd";)" ) == "\t\t\tt\t\t47\tabcd" );
     
+    BOOST_TEST( calc( R"(x$ = "test":print x$)" ) == "test\n" );
+    BOOST_TEST( calc( R"(x% = 12:print x%)" ) == "12\n" );
+    BOOST_TEST( calc( R"(x% = 2.5:print x%)" ) == "2\n" );
 
     BOOST_TEST( calc( R"(if 1=1 then print "OK")" ) == "OK\n" );
     BOOST_TEST( calc( R"(if 0=1 then print "OK")" ) == 0 );
     BOOST_TEST( calc( R"(if "" + "" then print "OK")" ) == 0 );
     BOOST_TEST( calc( R"(if "" + "" + "a" then print "OK")" ) == "OK\n" );
     BOOST_TEST( calc( R"(x=23 : if x==23 then print "OK")" ) == "OK\n" );
-    BOOST_TEST( calc( R"(if 2 then if 3 then x = "OK": print x;)" ) == "OK" );
-    BOOST_TEST( calc( R"(if 2 then if 2 - 1 * 2 then x = "OK": print x;)" ) == 0 );
-    BOOST_TEST( calc( R"(if 2 then if 2 - 1 * 3 then x = "OK": print x;)" ) == "OK" );
+    BOOST_TEST( calc( R"(if 2 then if 3 then x$ = "OK": print x$;)" ) == "OK" );
+    BOOST_TEST( calc( R"(if 2 then if 2 - 1 * 2 then x$ = "OK": print x$;)" ) == 0 );
+    BOOST_TEST( calc( R"(if 2 then if 2 - 1 * 3 then x$ = "OK": print x$;)" ) == "OK" );
 }
 
 void InteractiveMode()
 {
     using namespace client;
     using boost::spirit::x3::with;
-
-    std::cout << "Type an expression...or [q or Q] to quit\n\n";
+                                             
+    std::cout << "-------------------------\n";
+    std::cout << "Interactive mode\n";
+    std::cout << "-------------------------\n";
 
     TestExecutor calc{ client::line_parser };
 
@@ -871,7 +995,7 @@ void InteractiveMode()
     {
         std::cout << ">>> ";
 
-        if( !std::getline( std::cin, str ) || str.empty() || str[0] == 'q' || str[0] == 'Q' )
+        if( !std::getline( std::cin, str ) || str.empty() )
             break;
 
         const auto res = calc(str);
@@ -959,11 +1083,28 @@ int main(int argc, char* argv[])
     
     boost::unit_test::unit_test_main( init_unit_test, std::size(rgBootTestArgs), const_cast<char**>(rgBootTestArgs) );
 
+    client::Runtime runtime;
+
     for( int i = 1; i < argc; ++i )
     {
-        std::cout << "Running: " << argv[i] << std::endl;
+        if( boost::algorithm::ends_with( argv[i], ".input" ) )
+        {
+            std::cout << "-------------------------\n";
+            std::cout << "Read input: " << argv[i] << std::endl;
+            std::cout << "-------------------------\n";
 
-        client::Runtime runtime;
+            std::ifstream flIn( argv[i] );
+            std::string str;
+
+            while( std::getline( flIn, str ) )
+                runtime.AddFakeInput( std::move(str) );
+
+            continue;
+        }
+
+        std::cout << "-------------------------\n";
+        std::cout << "Running: " << argv[i] << std::endl;
+        std::cout << "-------------------------\n";
 
         bool res = Preparse( argv[i], runtime );
 
@@ -971,6 +1112,8 @@ int main(int argc, char* argv[])
             res = Execute( runtime );
 
         std::cout << std::endl << (res ? "[SUCCESS]": "[FAIL]")  << std::endl << std::endl;
+
+        runtime.Clear();
     }
 
     InteractiveMode();

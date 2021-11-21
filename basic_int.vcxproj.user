@@ -1,19 +1,19 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <LocalDebuggerCommandArguments>programs\squares.bas programs\prime_sieve.bas</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>programs\squares.bas programs\bmi_index.input programs\bmi_index.bas programs\prime_sieve.input programs\prime_sieve.bas c:\projects\basic_int\programs\prime_factors.input programs\prime_factors.bas</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <LocalDebuggerCommandArguments>programs\squares.bas programs\prime_sieve.bas</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>programs\squares.bas programs\bmi_index.input programs\bmi_index.bas programs\prime_sieve.input programs\prime_sieve.bas c:\projects\basic_int\programs\prime_factors.input programs\prime_factors.bas</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LocalDebuggerCommandArguments>programs\squares.bas programs\prime_sieve.bas</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>programs\squares.bas programs\bmi_index.input programs\bmi_index.bas programs\prime_sieve.input programs\prime_sieve.bas c:\projects\basic_int\programs\prime_factors.input programs\prime_factors.bas</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LocalDebuggerCommandArguments>programs\squares.bas programs\prime_sieve.bas</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>programs\squares.bas programs\bmi_index.input programs\bmi_index.bas programs\prime_sieve.input programs\prime_sieve.bas c:\projects\basic_int\programs\prime_factors.input programs\prime_factors.bas</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>
