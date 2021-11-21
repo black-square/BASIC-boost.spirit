@@ -70,6 +70,15 @@ namespace client
 
     using linenum_t = unsigned long long;
 
+    struct partial_parse_action_tag;
+
+    enum class PartialParseAction
+    {
+        Undefined,
+        Continue,
+        Discard
+    };
+
     struct runtime_tag;
 
     class RuntimeBase
@@ -308,7 +317,23 @@ namespace client
             auto&& name = _attr( ctx );
             auto& runtime = x3::get<runtime_tag>( ctx ).get();
             _val( ctx ) = runtime.Read( name );
-        };   
+        };  
+        
+        constexpr auto if_statement_op = []( auto& ctx ) {
+            auto&& v = _attr( ctx );
+
+            struct Impl
+            {
+                bool operator()( float_t v ) const { return v != 0; }
+                bool operator()( int_t v ) const { return v != 0; }
+                bool operator()( const str_t& v ) const { return !v.empty(); }
+            };
+
+            const bool res = boost::apply_visitor( Impl{}, v );
+            auto& action = x3::get<partial_parse_action_tag>( ctx ).get();
+
+            action = res ? PartialParseAction::Continue : PartialParseAction::Discard;
+        };
     }
 
     namespace grammar
@@ -354,16 +379,16 @@ namespace client
 
         const auto print_instruction =
             (no_case["print"] >> print_arg >> *(';' >> print_arg) >> (
-                ';' |
-                (&instruction_end >> attr( value_t{ "\n" } )[print_op])       
+                ';' | (&instruction_end >> attr( value_t{ "\n" } )[print_op])       
             )) |
             no_case["print"] >> attr( value_t{ "\n" } )[print_op];
 
         const auto instruction_def =
-            (identifier >> '=' >> expression)[assing_var_op] |
             no_case["text"] |
             no_case["home"] |            
-            print_instruction
+            print_instruction |
+            (no_case["if"] >> expression >> no_case["then"] )[if_statement_op] |
+            (-no_case["let"] >> identifier >> '=' >> expression )[assing_var_op]
         ;
 
         const auto identifier_def = x3::raw[ x3::lexeme[(x3::alpha |  '_') >> *(x3::alnum | '_' )] ];
@@ -510,6 +535,67 @@ private:
     std::stringstream mStrOut;
 };
 
+template< class ParserT, class RuntimeT, class ResultT>
+bool Parse( std::string_view str, ParserT &parser, RuntimeT &runtime, ResultT &result, std::string &err )
+{
+    using boost::spirit::x3::with;
+    using namespace client;
+
+    PartialParseAction parseAction{};
+
+    auto&& exec = with<runtime_tag>( std::ref( runtime ) )[
+        with<partial_parse_action_tag>( std::ref( parseAction ) ) [
+            parser
+       ]
+    ];
+
+    boost::spirit::x3::ascii::space_type space;
+
+    bool r = false;
+    auto cur = str.begin();
+    const auto end = str.end();
+    err.clear();
+
+    try
+    {
+        for( ;; ) 
+        {
+            parseAction = client::PartialParseAction::Undefined;
+            r = phrase_parse( cur, end, exec, space, result );
+
+            if( !r || cur == end )
+                break;
+
+            if( parseAction != PartialParseAction::Continue )
+            {
+                if( parseAction == PartialParseAction::Discard )
+                    cur = end;
+
+                break;
+            }     
+        }
+    }
+    catch( const std::runtime_error& e )
+    {
+        err = e.what();
+    }
+
+    if( !r || cur != end )
+    {
+        err = (!r ? "ERROR[" : "UNEXPECTED[") + err + "]";
+
+        if( cur != end )
+        {
+            err += " pos> ";
+            err.append( cur, end );
+        }
+
+        return false;
+    }
+
+    return true;
+}
+
 template<class GrammarT>
 struct TestExecutor
 {
@@ -519,37 +605,16 @@ struct TestExecutor
 
     auto operator()( std::string_view str )
     {
-        using boost::spirit::x3::with;
         using client::value_t;
 
         runtime.ClearOutput();
 
-        auto&& exec = with<client::runtime_tag>( std::ref( runtime ) )[
-            grammar
-        ];
-
         value_t res{};
-        boost::spirit::x3::ascii::space_type space;
+        std::string err{};
 
-        auto iter = str.begin();
-        const auto end = str.end();
-
-        bool r = false;
-        std::string err{}; 
-
-        try
+        if( !Parse( str, grammar, runtime, res, err ) )
         {
-            r = phrase_parse( iter, end, exec, space, res );
-        }
-        catch( const std::runtime_error& e )
-        {
-            err = e.what();
-        }
-
-        if( !r || iter != end )
-        {
-            std::string rest( iter, end );
-            return value_t{ "ERROR [" + err + "] \\ " + rest };
+            return value_t{ std::move(err) };
         }
 
         auto && strOut = runtime.GetOutput();
@@ -575,7 +640,7 @@ struct TestExecutorClear : TestExecutor<GrammarT>
     }
 };
 
-BOOST_AUTO_TEST_CASE( expression )
+BOOST_AUTO_TEST_CASE( expression_test )
 {
     TestExecutorClear calc{client::calculator};
 
@@ -611,7 +676,7 @@ BOOST_AUTO_TEST_CASE( expression )
     BOOST_TEST( calc( R"(("a " + "b")+" c")") == "a b c" );
 }
 
-BOOST_AUTO_TEST_CASE( line_parser )
+BOOST_AUTO_TEST_CASE( line_parser_test )
 {
     TestExecutorClear calc{ client::line_parser };
 
@@ -624,7 +689,17 @@ BOOST_AUTO_TEST_CASE( line_parser )
     BOOST_TEST( calc( R"(xvar3 = 37 : print "X: "; : print 2 + xvar3 + 3)" ) == "X: 42\n" );
     BOOST_TEST( calc( R"(print "t", 2+45 ;:print "!!!";)" ) == "t\t47!!!" );
     BOOST_TEST( calc( R"(print ,"t",,;)" ) == "\tt\t\t" );
-    BOOST_TEST( calc( R"(print ,,,"t",, 2+45,""; "ab" + "cd";)" ) == "\t\t\tt\t\t47\tabcd" );   
+    BOOST_TEST( calc( R"(print ,,,"t",, 2+45,""; "ab" + "cd";)" ) == "\t\t\tt\t\t47\tabcd" );
+    
+
+    BOOST_TEST( calc( R"(if 1=1 then print "OK")" ) == "OK\n" );
+    BOOST_TEST( calc( R"(if 0=1 then print "OK")" ) == 0 );
+    BOOST_TEST( calc( R"(if "" + "" then print "OK")" ) == 0 );
+    BOOST_TEST( calc( R"(if "" + "" + "a" then print "OK")" ) == "OK\n" );
+    BOOST_TEST( calc( R"(x=23 : if x==23 then print "OK")" ) == "OK\n" );
+    BOOST_TEST( calc( R"(if 2 then if 3 then x = "OK": print x;)" ) == "OK" );
+    BOOST_TEST( calc( R"(if 2 then if 2 - 1 * 2 then x = "OK": print x;)" ) == 0 );
+    BOOST_TEST( calc( R"(if 2 then if 2 - 1 * 3 then x = "OK": print x;)" ) == "OK" );
 }
 
 void InteractiveMode()
@@ -698,46 +773,21 @@ bool Preparse( const char* szFileName, client::Runtime &runtime )
 
 bool Execute( client::Runtime& runtime )
 {
-    using boost::spirit::x3::with;
+    using namespace client;
 
-    std::string *pStr;
-
-    auto&& parser = with<client::runtime_tag>( std::ref( runtime ) )[
-        client::line_parser
-    ];
-
-    while( pStr = runtime.GetNextLine() )
+    while( std::string *pStr = runtime.GetNextLine() )
     {
-        auto iter = pStr->begin();
-        auto end = pStr->end();
-        boost::spirit::x3::ascii::space_type space;
-
-        bool r = false;
+        value_t res{};
         std::string err{};
 
-        try
+        if( !Parse( *pStr, line_parser, runtime, res, err ) )
         {
-            r = phrase_parse( iter, end, parser, space );
-        }
-        catch( const std::runtime_error& e )
-        {
-            err = e.what();
-        }
-
-        if( !r || iter != end )
-        {
-            std::string rest( iter, end );
-            std::cout << "-------------------------\n";
-            std::cout << "Parsing failed " << err << "\n";
-            std::cout << "stopped at: \"" << rest << "\"\n";
-            std::cout << "-------------------------\n";
-
+            std::cout << "!!! " << err << std::endl;
             return false;
         }
     }
 
     return true;
-
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -745,21 +795,25 @@ bool Execute( client::Runtime& runtime )
 ///////////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
-    boost::unit_test::unit_test_main( init_unit_test, 1, argv );
+    const char *rgBootTestArgs[] = { argv[0], "--log_level=test_suite" };
+    
+    boost::unit_test::unit_test_main( init_unit_test, std::size(rgBootTestArgs), const_cast<char**>(rgBootTestArgs) );
 
-    if( argc != 2 )
+    for( int i = 1; i < argc; ++i )
     {
-        InteractiveMode();
-        return 0;
+        std::cout << "Running: " << argv[i] << std::endl;
+
+        client::Runtime runtime;
+
+        bool res = Preparse( argv[i], runtime );
+
+        if( res )
+            res = Execute( runtime );
+
+        std::cout << (res ? "[SUCCESS]": "[FAIL]")  << std::endl;
     }
 
-    client::Runtime runtime;
-    
-    if( !Preparse( argv[1], runtime ) )
-        return 1;
-
-    if( !Execute( runtime ) )
-        return 2;
+    InteractiveMode();
 
     return 0;
 }
