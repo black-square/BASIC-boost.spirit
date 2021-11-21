@@ -1,4 +1,5 @@
 //#define BOOST_SPIRIT_X3_DEBUG
+#define NOMINMAX
 #include <boost/config/warning_disable.hpp>
 #include <boost/spirit/home/x3.hpp>
 #include <boost/spirit/home/x3/support/ast/variant.hpp>
@@ -68,6 +69,68 @@ namespace client
         return os;
     }
 
+    // All arithmetic operations are done in floating point.No matter what
+    // the operands to + , -, *, / , and^ are, they will be converted to floating
+    // point.The functions SIN, COS, ATN, TAN, SQR, LOG, EXPand RND also
+    // convert their arguments to floating point and give the result as such.
+    float_t ForseFloat( const value_t& v )
+    {
+        struct Impl
+        {
+            float_t operator()( float_t v ) const { return v; }
+            float_t operator()( int_t v ) const { return static_cast<float_t>(v); }
+            float_t operator()( const str_t& v ) const { throw std::runtime_error( "Cannot be string" ); }
+        };
+
+        return boost::apply_visitor( Impl{}, v );
+    }
+
+    // The operators AND, OR, NOT force both operands to be integers between
+    // -32767 and +32767 before the operation occurs.
+    // When a number is converted to an integer, it is truncated (rounded down).
+    // It will perform as if INT function was applied.No automatic conversion is 
+    // done between strings and numbers
+    int_t ForseInt( const value_t& v )
+    {
+        struct Impl
+        {
+            int_t operator()( float_t v ) const { return static_cast<int_t>(v); }
+            int_t operator()( int_t v ) const { return v; }
+            int_t operator()( const str_t& v ) const { throw std::runtime_error("Cannot be string"); }
+        };
+
+        return boost::apply_visitor( Impl{}, v );
+    }
+
+    value_t AddImpl( const value_t& op1, const value_t& op2 )
+    {
+        const str_t* pS1 = boost::get<str_t>( &op1 );
+        const str_t* pS2 = boost::get<str_t>( &op2 );
+
+        //Strings may also be concatenated (put or joined together) through
+        //the use of the "+" operator.
+        return pS1 && pS2 ?
+             value_t{ *pS1 + *pS2 }:
+             value_t{ ForseFloat( op1 ) + ForseFloat( op2 )};
+    }
+
+    int_t LessEqImpl( const value_t& op1, const value_t& op2 )
+    {
+        return int_t{ ForseFloat( op1 ) <= ForseFloat( op2 ) };
+    }
+
+    bool ToBoolImpl( const value_t& v )
+    {
+        struct Impl
+        {
+            bool operator()( float_t v ) const { return v != 0; }
+            bool operator()( int_t v ) const { return v != 0; }
+            bool operator()( const str_t& v ) const { return !v.empty(); }
+        };
+
+        return boost::apply_visitor( Impl{}, v );
+    }
+
     using linenum_t = unsigned long long;
 
     struct partial_parse_action_tag;
@@ -118,7 +181,7 @@ namespace client
             if( it == mProgram.end() )
                 return {};
 
-            mCurLine = it->first + 1;
+            Goto( it->first + 1 );
 
             return { &it->second, it->first };
         }
@@ -128,53 +191,86 @@ namespace client
             mCurLine = line;
         }
 
+        void Gosub( linenum_t line )
+        {
+            mGosubStack.push_back( mCurLine );
+            Goto( line );
+        }
+
+        void Return()
+        {
+            if( mGosubStack.empty() )
+                throw std::runtime_error( "Mismatched GOSUB/RETURN statement" );
+
+            Goto( mGosubStack.back() );
+            mGosubStack.pop_back();
+        }
+
+        void ForLoop( std::string varName, value_t initVal, value_t targetVal )
+        {
+            Assign( varName, std::move(initVal) );
+            mForLoopStack.push_back({std::move(varName), std::move(targetVal), mCurLine} );
+        }
+
+        void Next( std::string varName )
+        {
+            for( ;; )
+            {
+                if( mForLoopStack.empty() )
+                    throw std::runtime_error( "Mismatched FOR/NEXT statement" );
+
+                if( varName.empty() || varName == mForLoopStack.back().varName )
+                    break;
+
+                mForLoopStack.pop_back();
+            }
+
+            auto &cur = mForLoopStack.back();    
+            auto curVal = Read( cur.varName );
+            curVal = AddImpl( curVal, value_t{ int_t{1} } );
+            Assign( cur.varName, curVal );
+
+            const int_t eqRes = LessEqImpl( curVal, cur.targetVal );
+
+            if( eqRes != 0 )
+                Goto( cur.startBodyLine );
+            else
+                mForLoopStack.pop_back();
+        }
+
         template<class T>
         void Print( T && val ) const
         {
             std::cout << val;
         }
 
+        void Clear()
+        {
+            RuntimeBase::Clear();
+            mProgram.clear();
+            mCurLine = 0;
+            mForLoopStack.clear();
+            mGosubStack.clear();
+        } 
+
+    private:
+        struct ForLoopItem
+        {
+            std::string varName;
+            value_t targetVal;
+            linenum_t startBodyLine;
+        };
+
     private:
         std::map<linenum_t, std::string> mProgram;
+        std::vector<ForLoopItem> mForLoopStack;
+        std::vector<linenum_t> mGosubStack;
         linenum_t mCurLine = 0;
     };
 
     namespace operations
     {
         using boost::fusion::at_c;
-
-        // All arithmetic operations are done in floating point.No matter what
-        // the operands to + , -, *, / , and^ are, they will be converted to floating
-        // point.The functions SIN, COS, ATN, TAN, SQR, LOG, EXPand RND also
-        // convert their arguments to floating point and give the result as such.
-        float_t ForseFloat( const value_t& v )
-        {
-            struct Impl
-            {
-                float_t operator()( float_t v ) const { return v; }
-                float_t operator()( int_t v ) const { return static_cast<float_t>(v); }
-                float_t operator()( const str_t& v ) const { throw std::runtime_error( "Cannot be string" ); }
-            };
-
-            return boost::apply_visitor( Impl{}, v );
-        }
-
-        // The operators AND, OR, NOT force both operands to be integers between
-        // -32767 and +32767 before the operation occurs.
-        // When a number is converted to an integer, it is truncated (rounded down).
-        // It will perform as if INT function was applied.No automatic conversion is 
-        // done between strings and numbers
-        int_t ForseInt( const value_t& v )
-        {
-            struct Impl
-            {
-                int_t operator()( float_t v ) const { return static_cast<int_t>(v); }
-                int_t operator()( int_t v ) const { return v; }
-                int_t operator()( const str_t& v ) const { throw std::runtime_error("Cannot be string"); }
-            };
-
-            return boost::apply_visitor( Impl{}, v );
-        }
 
         constexpr auto cpy_op = []( auto& ctx )
         { 
@@ -219,15 +315,7 @@ namespace client
             auto && op1 = _val( ctx );
             auto && op2 = _attr( ctx );
 
-            const str_t *pS1 = boost::get<str_t>(&op1);
-            const str_t *pS2 = boost::get<str_t>(&op2);
-
-            //Strings may also be concatenated (put or joined together) through
-            //the use of the "+" operator.
-            if( pS1 && pS2 )
-                _val(ctx) = *pS1 + *pS2;
-            else
-                _val(ctx) = ForseFloat(op1) + ForseFloat(op2);
+            _val(ctx) = AddImpl( op1, op2 );
         };
 
         constexpr auto sub_op = []( auto& ctx )
@@ -271,7 +359,7 @@ namespace client
         
         constexpr auto less_eq_op = []( auto& ctx )
         {
-            _val( ctx ) = int_t{ ForseFloat(_val( ctx )) <= ForseFloat(_attr( ctx )) };
+            _val( ctx ) = LessEqImpl( _val( ctx ), _attr( ctx ) );
         };
 
         constexpr auto greater_eq_op = []( auto& ctx )
@@ -297,6 +385,11 @@ namespace client
         constexpr auto sqr_op = []( auto& ctx ) {
             const auto& v = _attr( ctx );
             _val( ctx ) = std::sqrt( ForseFloat(v) );
+        };
+
+        constexpr auto int_op = []( auto& ctx ) {
+            const auto& v = _attr( ctx );
+            _val( ctx ) = ForseInt( v );
         };
 
         constexpr auto array_acc_op = []( auto& ctx ) {
@@ -329,15 +422,7 @@ namespace client
         
         constexpr auto if_stmt_op = []( auto& ctx ) {
             auto&& v = _attr( ctx );
-
-            struct Impl
-            {
-                bool operator()( float_t v ) const { return v != 0; }
-                bool operator()( int_t v ) const { return v != 0; }
-                bool operator()( const str_t& v ) const { return !v.empty(); }
-            };
-
-            const bool res = boost::apply_visitor( Impl{}, v );
+            const bool res = ToBoolImpl(v);
             auto& action = x3::get<partial_parse_action_tag>( ctx ).get();
 
             action = res ? PartialParseAction::Continue : PartialParseAction::Discard;
@@ -347,6 +432,39 @@ namespace client
             auto&& v = _attr( ctx );
             auto& runtime = x3::get<runtime_tag>( ctx ).get();
             runtime.Goto( v );
+        };         
+        
+        constexpr auto end_stmt_op = []( auto& ctx ) {
+            auto& runtime = x3::get<runtime_tag>( ctx ).get();
+            runtime.Goto( std::numeric_limits<linenum_t>::max() );
+        };
+
+        constexpr auto gosub_stmt_op = []( auto& ctx ) {
+            auto&& v = _attr( ctx );
+            auto& runtime = x3::get<runtime_tag>( ctx ).get();
+            runtime.Gosub( v );
+        };         
+        
+        constexpr auto return_stmt_op = []( auto& ctx ) {
+            auto&& v = _attr( ctx );
+            auto& runtime = x3::get<runtime_tag>( ctx ).get();
+            runtime.Return();
+        };
+
+        constexpr auto for_stmt_op = []( auto& ctx ) {
+            auto&& v = _attr( ctx );
+            auto&& name = at_c<0>( v );
+            auto&& initVal = at_c<1>( v );
+            auto&& endVal = at_c<2>( v );
+            auto& runtime = x3::get<runtime_tag>( ctx ).get();
+
+            runtime.ForLoop( name, initVal, endVal );
+        };
+
+        constexpr auto next_stmt_op = []( auto& ctx ) {
+            auto&& v = _attr( ctx );
+            auto& runtime = x3::get<runtime_tag>( ctx ).get();
+            runtime.Next(v);
         };
     }
 
@@ -375,6 +493,7 @@ namespace client
         x3::rule<class identifier, std::string> const identifier( "identifier" );
         x3::rule<class instruction, value_t> const instruction( "instruction" );
         x3::rule<class line_parser, value_t> const line_parser( "line_parser" );
+        x3::rule<class return_stmt, std::string> const return_stmt( "return_stmt" );
 
         const auto expression =
             log_or;
@@ -397,12 +516,20 @@ namespace client
             )) |
             no_case["print"] >> attr( value_t{ "\n" } )[print_op];
 
+        const auto return_stmt_def =
+            no_case["next"] >> -identifier;
+
         const auto instruction_def =
             no_case["text"] |
             no_case["home"] |            
             print_instruction |
-            (no_case["if"] >> expression >> no_case["then"] )[if_stmt_op] |
+            (no_case["if"] >> expression >> -no_case["then"] )[if_stmt_op] |
             no_case["goto"] >> x3::ulong_long[goto_stmt_op] |
+            no_case["gosub"] >> x3::ulong_long[gosub_stmt_op] |
+            no_case["return"][return_stmt_op] |
+            (no_case["for"] >> identifier >> '=' >> expression >> no_case["to"] >> expression)[for_stmt_op] |
+            return_stmt[next_stmt_op] |
+            no_case["end"][end_stmt_op] |
             (-no_case["let"] >> identifier >> '=' >> expression )[assing_var_op]
         ;
 
@@ -424,6 +551,7 @@ namespace client
              | (no_case["not"] >> term[not_op])
              | no_case["sum"] >> double_args[test_op]
              | no_case["sqr"] >> single_arg[sqr_op]
+             | no_case["int"] >> single_arg[int_op]
              | identifier[read_var_op]
              | (identifier >> double_args)[array_acc_op]
             ;
@@ -466,7 +594,7 @@ namespace client
             );
 
         BOOST_SPIRIT_DEFINE( exponent, mult_div, term, add_sub, relational, log_and, log_or, 
-            double_args, identifier, instruction, line_parser
+            double_args, identifier, instruction, line_parser, return_stmt
         );
 
         const auto calculator = expression;
@@ -477,13 +605,16 @@ namespace client
         constexpr auto add_num_line = []( auto& ctx )
         {
             auto& runtime = x3::get<runtime_tag>( ctx ).get();
-            const auto [line, str] = _attr( ctx );
+            auto && [line, str] = _attr( ctx );
 
-            runtime.AddLine( line, str );
+            if( !str.empty() )
+                runtime.AddLine( line, str );
         };
 
         using x3::char_;
         using x3::eoi;
+        using x3::no_case;
+        using x3::omit;
 
         x3::rule<class line> const line( "line" );
         x3::rule<class num_line, std::tuple<linenum_t, std::string>> const num_line( "num_line" );
@@ -491,7 +622,10 @@ namespace client
         const auto preparser = line;
 
         const auto num_line_def =
-            x3::ulong_long >> x3::lexeme[+char_];
+            x3::ulong_long >> (
+                no_case["rem"] >> omit[x3::lexeme[+char_]] |
+                x3::lexeme[+char_]
+            );
 
         const auto line_def =  
             num_line[add_num_line] |
