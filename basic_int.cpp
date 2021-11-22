@@ -729,6 +729,7 @@ namespace client
         using x3::eoi;
         using x3::eps;
         using x3::omit;
+        using x3::lexeme;
         constexpr auto line_num = x3::ulong_long;
         
         using str_view = boost::iterator_range<std::string_view::const_iterator>;
@@ -746,7 +747,7 @@ namespace client
         x3::rule<class string_lit, std::string> const string_lit( "string_lit" );
         x3::rule<class instruction, value_t> const instruction( "instruction" );
         x3::rule<class line_parser, value_t> const line_parser( "line_parser" );
-        x3::rule<class return_stmt, std::string> const return_stmt( "return_stmt" );
+        x3::rule<class next_stmt, std::string> const next_stmt( "next_stmt" );
 
         const auto expression =
             log_or;
@@ -754,7 +755,7 @@ namespace client
         const auto quote = char_( '"' ); //MSVC has problems if we inline it.
 
         const auto string_lit_def =
-            x3::lexeme['"' >> *~quote >> '"'];
+            lexeme['"' >> *~quote >> '"'];
 
         const auto line_parser_def =
             instruction % ':';
@@ -792,7 +793,7 @@ namespace client
                 ) >>
                 *( (',' >> attr( std::string{"??"} ) >> var_name)[input_op] );
 
-        const auto return_stmt_def =
+        const auto next_stmt_def =
             no_case["next"] >> -var_name;
 
         const auto for_stmt = 
@@ -827,16 +828,16 @@ namespace client
             no_case["gosub"] >> line_num[gosub_stmt_op] |
             no_case["return"][return_stmt_op] |
             for_stmt |
-            return_stmt[next_stmt_op] |
+            next_stmt[next_stmt_op] |
             no_case["end"][end_stmt_op] |
-            no_case["dim"] >> omit[x3::lexeme[+char_]] |
+            no_case["dim"] >> omit[lexeme[+char_]] |
             no_case["restore"][restore_stmt_op] |
             no_case["read"] >> var_name[read_stmt_op] |
-            no_case["rem"] >> omit[x3::lexeme[+char_]] |
+            no_case["rem"] >> omit[lexeme[+char_]] |
             (-no_case["let"] >> var_name >> '=' >> expression )[assing_var_op]
         ;
 
-        const auto identifier_def = x3::raw[ x3::lexeme[(x3::alpha |  '_') >> *(x3::alnum | '_' ) >> -(lit('%') | '$') ]];
+        const auto identifier_def = x3::raw[ lexeme[(x3::alpha |  '_') >> *(x3::alnum | '_' ) >> -(lit('%') | '$') ]];
 
         const auto var_name_def = 
             identifier[cpy_op] >> 
@@ -845,19 +846,19 @@ namespace client
         ;
             
         const auto term_def =
-            strict_float[cpy_op]      
-             | int_[cpy_int_op]
-             | string_lit[cpy_op]    
-             | '(' >> expression[cpy_op] >> ')'
-             | '-' >> term[neg_op]
-             | '+' >> term[cpy_op]
-             | (no_case["not"] >> term[not_op])    
-             | no_case["sqr"] >> single_arg[sqr_op]
-             | no_case["int"] >> single_arg[int_op]
-             | no_case["abs"] >> single_arg[abs_op]
-             | no_case["left$"] >> double_args[left_op]
-             | var_name[load_var_op]
-            ;
+            strict_float[cpy_op] |     
+            int_[cpy_int_op] |
+            string_lit[cpy_op] |   
+            '(' >> expression[cpy_op] >> ')' |
+            '-' >> term[neg_op] |
+            '+' >> term[cpy_op] |
+            (no_case["not"] >> term[not_op]) |
+            no_case["sqr"] >> single_arg[sqr_op] |
+            no_case["int"] >> single_arg[int_op] |
+            no_case["abs"] >> single_arg[abs_op] |
+            no_case["left$"] >> double_args[left_op] |
+            var_name[load_var_op]
+        ;
 
         const auto exponent_def =
             term[cpy_op] >> *(
@@ -897,7 +898,7 @@ namespace client
             );
 
         BOOST_SPIRIT_DEFINE( exponent, mult_div, term, add_sub, relational, log_and, log_or, 
-            double_args, identifier, var_name, string_lit, instruction, line_parser, return_stmt
+            double_args, identifier, var_name, string_lit, instruction, line_parser, next_stmt
         );
 
         const auto calculator = expression;
@@ -927,6 +928,7 @@ namespace client
         using x3::eoi;
         using x3::no_case;
         using x3::omit;
+        using x3::lexeme;
         using grammar::line_num;
         using grammar::strict_float;
         using grammar::string_lit;
@@ -944,10 +946,10 @@ namespace client
             ) % ',';
 
         const auto num_line_def =
-            line_num >> x3::lexeme[+char_];
+            line_num >> lexeme[+char_];
 
         const auto line_def =
-            line_num >> no_case["rem"] >> omit[x3::lexeme[+char_]] |
+            line_num >> no_case["rem"] >> omit[lexeme[+char_]] |
             line_num >> data_stmt |
             num_line[add_num_line_op] |
             eoi;
