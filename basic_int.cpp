@@ -76,7 +76,7 @@ namespace client
     // the operands to + , -, *, / , and^ are, they will be converted to floating
     // point.The functions SIN, COS, ATN, TAN, SQR, LOG, EXPand RND also
     // convert their arguments to floating point and give the result as such.
-    float_t ForseFloat( const value_t& v )
+    float_t ForceFloat( const value_t& v )
     {
         struct Impl
         {
@@ -93,13 +93,25 @@ namespace client
     // When a number is converted to an integer, it is truncated (rounded down).
     // It will perform as if INT function was applied.No automatic conversion is 
     // done between strings and numbers
-    int_t ForseInt( const value_t& v )
+    int_t ForceInt( const value_t& v )
     {
         struct Impl
         {
             int_t operator()( float_t v ) const { return static_cast<int_t>(v); }
             int_t operator()( int_t v ) const { return v; }
             int_t operator()( const str_t& v ) const { throw std::runtime_error("Cannot be string"); }
+        };
+
+        return boost::apply_visitor( Impl{}, v );
+    }
+
+    const str_t &ForceStr( const value_t& v )
+    {
+        struct Impl
+        {
+            const str_t &operator()( float_t v ) const { throw std::runtime_error( "Must be string" ); }
+            const str_t &operator()( int_t v ) const { throw std::runtime_error( "Must be string" ); }
+            const str_t &operator()( const str_t& v ) const { return v; }
         };
 
         return boost::apply_visitor( Impl{}, v );
@@ -114,12 +126,12 @@ namespace client
         //the use of the "+" operator.
         return pS1 && pS2 ?
              value_t{ *pS1 + *pS2 }:
-             value_t{ ForseFloat( op1 ) + ForseFloat( op2 )};
+             value_t{ ForceFloat( op1 ) + ForceFloat( op2 )};
     }
 
     int_t LessEqImpl( const value_t& op1, const value_t& op2 )
     {
-        return int_t{ ForseFloat( op1 ) <= ForseFloat( op2 ) };
+        return int_t{ ForceFloat( op1 ) <= ForceFloat( op2 ) };
     }
 
     bool ToBoolImpl( const value_t& v )
@@ -151,7 +163,7 @@ namespace client
     class RuntimeBase
     {
     public:
-        void Assign( std::string name, value_t val )
+        void Store( std::string name, value_t val )
         {
             if( name.empty() )
                 throw std::runtime_error( "variable name cannot be empty" );
@@ -171,17 +183,17 @@ namespace client
                     break;
 
                 case '%':
-                    res = ForseInt( val );
+                    res = ForceInt( val );
                     break;
 
                 default:
-                    res = ForseFloat( val );
+                    res = ForceFloat( val );
             };
 
             mVars[name] = res;
         }
 
-        value_t Read( std::string name )
+        value_t Load( std::string name )
         {
             if( name.empty() )
                 throw std::runtime_error( "variable name cannot be empty" );
@@ -192,6 +204,8 @@ namespace client
 
             if( it != mVars.end() )
                 return it->second;
+
+            std::cout << "WARNING: Access var before init: " << name << std::endl;
 
             switch( name.back() )
             {
@@ -254,7 +268,7 @@ namespace client
 
         void ForLoop( std::string varName, value_t initVal, value_t targetVal, value_t stepVal )
         {
-            Assign( varName, std::move(initVal) );
+            Store( varName, std::move(initVal) );
             mForLoopStack.push_back({std::move(varName), std::move(targetVal), std::move(stepVal), mCurLine} );
         }
 
@@ -272,9 +286,9 @@ namespace client
             }
 
             auto &cur = mForLoopStack.back();    
-            auto curVal = Read( cur.varName );
+            auto curVal = Load( cur.varName );
             curVal = AddImpl( curVal, cur.stepVal );
-            Assign( cur.varName, curVal );
+            Store( cur.varName, curVal );
 
             const int_t eqRes = LessEqImpl( curVal, cur.targetVal );
 
@@ -339,12 +353,41 @@ namespace client
                 std::cout << "?REENTER" << std::endl;
             } 
 
-            Assign( name, res );
+            Store( name, res );
         }
 
         void AddFakeInput( std::string str )
         {
             mFakeInput.push_back( std::move(str) );
+        }
+
+        void AddData( int v )
+        {
+            mData.push_back( value_t{ static_cast<int_t>(v) } );
+        }            
+        
+        void AddData( float v )
+        {
+            mData.push_back( value_t{ float_t{v} } );
+        }
+
+        void AddData( str_t v )
+        {
+            mData.push_back( value_t{ std::move(v) } );
+        }
+
+        void Read( std::string name )
+        {
+            if( mCurDataIdx >= mData.size() )
+                throw std::runtime_error("Out of DATA");
+
+            Store( std::move(name), mData[mCurDataIdx]);
+            ++mCurDataIdx;
+        }
+
+        void Restore()
+        {
+            mCurDataIdx = 0;
         }
 
         void Clear()
@@ -355,6 +398,8 @@ namespace client
             mGosubStack.clear();
             mFakeInput.clear();
             mCurLine = 0;
+            mData.clear();
+            mCurDataIdx = 0;
         } 
 
     private:
@@ -372,6 +417,9 @@ namespace client
         std::vector<linenum_t> mGosubStack;
         std::deque<std::string> mFakeInput;
         linenum_t mCurLine = 0;
+        std::vector<value_t> mData;
+        size_t mCurDataIdx = 0;
+
     };
 
     namespace operations
@@ -398,7 +446,7 @@ namespace client
             
             _val( ctx ) = int_t{ pS1 && pS2 ?
                 *pS1 == *pS2 :
-                ForseFloat( op1 ) == ForseFloat( op2 )
+                ForceFloat( op1 ) == ForceFloat( op2 )
             };
         };
 
@@ -412,7 +460,7 @@ namespace client
 
             _val( ctx ) = int_t{ pS1 && pS2 ?
                 *pS1 != *pS2 :
-                ForseFloat( op1 ) != ForseFloat( op2 )
+                ForceFloat( op1 ) != ForceFloat( op2 )
             };
         };
 
@@ -426,41 +474,41 @@ namespace client
 
         constexpr auto sub_op = []( auto& ctx )
         { 
-            _val(ctx) = ForseFloat(_val( ctx )) - ForseFloat(_attr(ctx)); 
+            _val(ctx) = ForceFloat(_val( ctx )) - ForceFloat(_attr(ctx)); 
         };
 
         constexpr auto mul_op = []( auto& ctx )
         {
-            _val( ctx ) = ForseFloat(_val( ctx)) * ForseFloat(_attr(ctx));
+            _val( ctx ) = ForceFloat(_val( ctx)) * ForceFloat(_attr(ctx));
         };
                 
         constexpr auto div_op = []( auto& ctx )
         {
-            _val( ctx ) = ForseFloat(_val( ctx)) / ForseFloat(_attr(ctx));
+            _val( ctx ) = ForceFloat(_val( ctx)) / ForceFloat(_attr(ctx));
         };
 
         constexpr auto exp_op = []( auto& ctx )
         { 
-            _val( ctx ) = std::pow( ForseFloat(_val(ctx)), ForseFloat(_attr(ctx)) );
+            _val( ctx ) = std::pow( ForceFloat(_val(ctx)), ForceFloat(_attr(ctx)) );
         };
 
         constexpr auto not_op = []( auto& ctx )
         { 
-            _val( ctx ) = int_t{ !ForseInt(_attr(ctx)) };
+            _val( ctx ) = int_t{ !ForceInt(_attr(ctx)) };
         };
 
         constexpr auto neg_op = []( auto& ctx )
         { 
-            _val( ctx ) = -ForseFloat(_attr( ctx )); };
+            _val( ctx ) = -ForceFloat(_attr( ctx )); };
 
         const auto less_op = []( auto& ctx )
         { 
-            _val( ctx ) = int_t{ ForseFloat(_val( ctx )) < ForseFloat(_attr( ctx )) };
+            _val( ctx ) = int_t{ ForceFloat(_val( ctx )) < ForceFloat(_attr( ctx )) };
         };
 
         constexpr auto greater_op = []( auto& ctx )
         { 
-            _val( ctx ) = int_t{ ForseFloat(_val( ctx )) > ForseFloat(_attr( ctx )) };
+            _val( ctx ) = int_t{ ForceFloat(_val( ctx )) > ForceFloat(_attr( ctx )) };
         };
         
         constexpr auto less_eq_op = []( auto& ctx )
@@ -470,32 +518,38 @@ namespace client
 
         constexpr auto greater_eq_op = []( auto& ctx )
         { 
-            _val( ctx ) = int_t{ ForseFloat(_val( ctx )) >= ForseFloat(_attr( ctx) ) };
+            _val( ctx ) = int_t{ ForceFloat(_val( ctx )) >= ForceFloat(_attr( ctx) ) };
         };
 
         constexpr auto and_op = []( auto& ctx )
         { 
-            _val( ctx ) = int_t{ ForseInt(_val( ctx )) && ForseInt(_attr( ctx )) }; 
+            _val( ctx ) = int_t{ ForceInt(_val( ctx )) && ForceInt(_attr( ctx )) }; 
         };
 
         constexpr auto or_op = []( auto& ctx )
         { 
-            _val( ctx ) = int_t{ ForseInt(_val( ctx )) || ForseInt(_attr( ctx )) };
+            _val( ctx ) = int_t{ ForceInt(_val( ctx )) || ForceInt(_attr( ctx )) };
         };
 
-        constexpr auto test_op = []( auto& ctx ) {
-           const auto[o1, o2] = _attr( ctx );
-            _val( ctx ) = ForseFloat(o1) + ForseFloat(o2);
+        constexpr auto left_op = []( auto& ctx ) {
+           auto && [o1, o2] = _attr( ctx );
+
+            _val( ctx ) = ForceStr(o1).substr( 0, ForceInt( o2 ) );
         };
 
         constexpr auto sqr_op = []( auto& ctx ) {
             const auto& v = _attr( ctx );
-            _val( ctx ) = std::sqrt( ForseFloat(v) );
+            _val( ctx ) = std::sqrt( ForceFloat(v) );
         };
 
         constexpr auto int_op = []( auto& ctx ) {
             const auto& v = _attr( ctx );
-            _val( ctx ) = ForseInt( v );
+            _val( ctx ) = ForceInt( v );
+        };
+
+        constexpr auto abs_op = []( auto& ctx ) {
+            const auto& v = _attr( ctx );
+            _val( ctx ) = std::fabs(ForceFloat(v));
         };
 
         constexpr auto array_acc_op = []( auto& ctx ) {
@@ -503,7 +557,7 @@ namespace client
             const auto &s = at_c<0>( v );
             const auto [o1, o2] = at_c<1>(v);
             std::cout << s <<'[' << o1 << ',' << o2 << ']' << std::endl;
-            _val( ctx ) = ForseFloat(o1) * ForseFloat(o2);
+            _val( ctx ) = ForceFloat(o1) * ForceFloat(o2);
         };
 
         constexpr auto print_op = []( auto& ctx ) 
@@ -512,19 +566,33 @@ namespace client
             boost::apply_visitor( [&runtime](auto&& v) { runtime.Print(v); }, _attr( ctx ) );
         };
 
+        constexpr auto print_tab_op = []( auto& ctx )
+        {
+            const auto& v = _attr( ctx );
+            auto& runtime = x3::get<runtime_tag>( ctx ).get();
+           
+            runtime.Print( str_t(ForceInt(v), ' ') );
+        };
+
         constexpr auto assing_var_op = []( auto& ctx ) {
             auto&& v = _attr( ctx );
             auto&& name = at_c<0>( v );
             auto&& value = at_c<1>( v );
             auto& runtime = x3::get<runtime_tag>( ctx ).get();
-            runtime.Assign( name, value );
+            runtime.Store( name, value );
         };
 
-        constexpr auto read_var_op = []( auto& ctx ) {
+        constexpr auto load_var_op = []( auto& ctx ) {
             auto&& name = _attr( ctx );
             auto& runtime = x3::get<runtime_tag>( ctx ).get();
-            _val( ctx ) = runtime.Read( name );
-        };  
+            _val( ctx ) = runtime.Load( std::move(name) );
+        };
+        
+        constexpr auto read_stmt_op = []( auto& ctx ) {
+            auto&& name = _attr( ctx );
+            auto& runtime = x3::get<runtime_tag>( ctx ).get();
+            runtime.Read( std::move(name) );
+        };
         
         constexpr auto if_stmt_op = []( auto& ctx ) {
             auto&& v = _attr( ctx );
@@ -540,6 +608,27 @@ namespace client
                 runtime.Goto(gotoLine );
         };
 
+        constexpr auto on_stmt_impl_op = []( auto& ctx ) {
+            auto&& v = _attr( ctx );
+            const auto num = (size_t)ForceInt( at_c<0>( v ) );
+            auto&& lines = at_c<1>( v );
+
+            if( num >= lines.size() )
+                throw std::runtime_error( "ON statement incorrect branch" );
+
+            return lines[num];
+        };
+
+        constexpr auto on_goto_stmt_op = []( auto& ctx ) {
+            auto& runtime = x3::get<runtime_tag>( ctx ).get();
+            runtime.Goto( on_stmt_impl_op(ctx) );
+        };
+
+        constexpr auto on_gosub_stmt_op = []( auto& ctx ) {
+            auto& runtime = x3::get<runtime_tag>( ctx ).get();
+            runtime.Gosub( on_stmt_impl_op( ctx ) );
+        };
+
         constexpr auto goto_stmt_op = []( auto& ctx ) {
             auto&& v = _attr( ctx );
             auto& runtime = x3::get<runtime_tag>( ctx ).get();
@@ -549,6 +638,11 @@ namespace client
         constexpr auto end_stmt_op = []( auto& ctx ) {
             auto& runtime = x3::get<runtime_tag>( ctx ).get();
             runtime.Goto( MaxLineNum );
+        };        
+        
+        constexpr auto restore_stmt_op = []( auto& ctx ) {
+            auto& runtime = x3::get<runtime_tag>( ctx ).get();
+            runtime.Restore();
         };
 
         constexpr auto gosub_stmt_op = []( auto& ctx ) {
@@ -602,6 +696,7 @@ namespace client
         using x3::eoi;
         using x3::eps;
         using x3::omit;
+        constexpr auto line_num = x3::ulong_long;
         
         using str_view = boost::iterator_range<std::string_view::const_iterator>;
 
@@ -633,11 +728,21 @@ namespace client
         const auto instruction_end = 
             ':' | eoi;
 
+        const auto single_arg =
+            '(' >> expression >> ')';
+
+        const auto double_args_def =
+            '(' >> expression >> ',' >> expression >> ')';
+
         const auto print_comma = 
             ',' >> attr( value_t{ "\t" } )[print_op];
 
         const auto print_arg = 
-            +(+print_comma | expression[print_op]);
+            +(
+                +print_comma | 
+                no_case["tab"] >> single_arg[print_tab_op] |
+                expression[print_op]
+             );
 
         const auto print_stmt =
             (no_case["print"] >> print_arg >> *(';' >> print_arg) >> (
@@ -667,8 +772,13 @@ namespace client
         //  https://github.com/boostorg/spirit/issues/378
         //  https://stackoverflow.com/a/49309385/3415353  
         const auto if_stmt =
-            (no_case["if"] >> expression >> no_case["then"] >> x3::ulong_long)[if_stmt_op] |
+            (no_case["if"] >> expression >> no_case["then"] >> line_num)[if_stmt_op] |
             (no_case["if"] >> expression >> -no_case["then"] >> attr(MaxLineNum))[if_stmt_op]
+        ;
+
+        const auto on_stmt =
+            (no_case["on"] >> expression >> no_case["goto"] >> line_num % ',')[on_goto_stmt_op] |
+            (no_case["on"] >> expression >> no_case["gosub"] >> line_num % ',')[on_gosub_stmt_op]
         ;
 
         const auto instruction_def =
@@ -678,24 +788,21 @@ namespace client
             print_stmt |
             input_stmt |
             if_stmt |
-            no_case["goto"] >> x3::ulong_long[goto_stmt_op] |
-            no_case["gosub"] >> x3::ulong_long[gosub_stmt_op] |
+            on_stmt |
+            no_case["goto"] >> line_num[goto_stmt_op] |
+            no_case["gosub"] >> line_num[gosub_stmt_op] |
             no_case["return"][return_stmt_op] |
             for_stmt |
             return_stmt[next_stmt_op] |
             no_case["end"][end_stmt_op] |
-            no_case["dim"] >> identifier % ',' | 
+            no_case["dim"] >> omit[x3::lexeme[+char_]] |
+            no_case["restore"][restore_stmt_op] |
+            no_case["read"] >> identifier[read_stmt_op] |
             no_case["rem"] >> omit[x3::lexeme[+char_]] |
             (-no_case["let"] >> identifier >> '=' >> expression )[assing_var_op]
         ;
 
         const auto identifier_def = x3::raw[ x3::lexeme[(x3::alpha |  '_') >> *(x3::alnum | '_' ) >> -(lit('%') | '$') ]];
-
-        const auto single_arg =
-            '(' >> expression >> ')';
-
-        const auto double_args_def =
-            '(' >> expression >> ',' >> expression >> ')';
             
         const auto term_def =
             strict_float[cpy_op]      
@@ -704,11 +811,12 @@ namespace client
              | '(' >> expression[cpy_op] >> ')'
              | '-' >> term[neg_op]
              | '+' >> term[cpy_op]
-             | (no_case["not"] >> term[not_op])
-             | no_case["sum"] >> double_args[test_op]
+             | (no_case["not"] >> term[not_op])    
              | no_case["sqr"] >> single_arg[sqr_op]
              | no_case["int"] >> single_arg[int_op]
-             | identifier[read_var_op]
+             | no_case["abs"] >> single_arg[abs_op]
+             | no_case["left$"] >> double_args[left_op]
+             | identifier[load_var_op]
              | (identifier >> double_args)[array_acc_op]
             ;
 
@@ -758,7 +866,7 @@ namespace client
 
     namespace preparse
     {
-        constexpr auto add_num_line = []( auto& ctx )
+        constexpr auto add_num_line_op = []( auto& ctx )
         {
             auto& runtime = x3::get<runtime_tag>( ctx ).get();
             auto && [line, str] = _attr( ctx );
@@ -767,26 +875,43 @@ namespace client
                 runtime.AddLine( line, str );
         };
 
+        constexpr auto data_op = []( auto& ctx )
+        {
+            auto& runtime = x3::get<runtime_tag>( ctx ).get();
+            auto&& v = _attr( ctx );
+
+            runtime.AddData( std::move(v) );
+        };
+
         using x3::char_;
+        using x3::int_;
         using x3::eoi;
         using x3::no_case;
         using x3::omit;
+        using grammar::line_num;
+        using grammar::strict_float;
+        using grammar::string_lit;
 
         x3::rule<class line> const line( "line" );
         x3::rule<class num_line, std::tuple<linenum_t, std::string>> const num_line( "num_line" );
 
         const auto preparser = line;
 
-        const auto num_line_def =
-            x3::ulong_long >> (
-                no_case["rem"] >> omit[x3::lexeme[+char_]] |
-                x3::lexeme[+char_]
-            );
+        const auto data_stmt = 
+            no_case["data"] >> ( 
+                strict_float[data_op] |
+                int_[data_op] |
+                string_lit[data_op]
+            ) % ',';
 
-        const auto line_def =  
-            num_line[add_num_line] |
-            eoi
-            ;
+        const auto num_line_def =
+            line_num >> x3::lexeme[+char_];
+
+        const auto line_def =
+            line_num >> no_case["rem"] >> omit[x3::lexeme[+char_]] |
+            line_num >> data_stmt |
+            num_line[add_num_line_op] |
+            eoi;
 
         BOOST_SPIRIT_DEFINE( line, num_line );
     }
@@ -984,6 +1109,10 @@ BOOST_AUTO_TEST_CASE( expression_test )
     BOOST_TEST( calc( R"(("a " + "b")+" c")") == "a b c" );
 
     BOOST_TEST( calc( "SQR(156.25)" ) == 12.5f );
+    BOOST_TEST( calc( "ABS(12.34)" ) == 12.34f );
+    BOOST_TEST( calc( "-12.34" ) == -12.34f );
+    BOOST_TEST( calc( "ABS(-12.34)" ) == 12.34f );
+    BOOST_TEST( calc( R"(left$("applesoft", 5))" ) == "apple" );
 }
 
 BOOST_AUTO_TEST_CASE( line_parser_test )
@@ -1000,7 +1129,8 @@ BOOST_AUTO_TEST_CASE( line_parser_test )
     BOOST_TEST( calc( R"(print "t", 2+45 ;:print "!!!";)" ) == "t\t47!!!" );
     BOOST_TEST( calc( R"(print ,"t",,;)" ) == "\tt\t\t" );
     BOOST_TEST( calc( R"(print ,,,"t",, 2+45,""; "ab" + "cd";)" ) == "\t\t\tt\t\t47\tabcd" );
-    
+    BOOST_TEST( calc( R"(print tab(3);"a";)" ) == "   a" );
+
     BOOST_TEST( calc( R"(x$ = "test":print x$)" ) == "test\n" );
     BOOST_TEST( calc( R"(x% = 12:print x%)" ) == "12\n" );
     BOOST_TEST( calc( R"(x% = 2.5:print x%)" ) == "2\n" );
