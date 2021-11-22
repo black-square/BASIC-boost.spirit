@@ -135,6 +135,7 @@ namespace client
     }
 
     using linenum_t = unsigned long long;
+    constexpr linenum_t MaxLineNum = std::numeric_limits<linenum_t>::max();
 
     struct partial_parse_action_tag;
 
@@ -182,8 +183,24 @@ namespace client
 
         value_t Read( std::string name )
         {
+            if( name.empty() )
+                throw std::runtime_error( "variable name cannot be empty" );
+
             boost::algorithm::to_lower( name );
-            return mVars[name];
+
+            const auto it = mVars.find(name);
+
+            if( it != mVars.end() )
+                return it->second;
+
+            switch( name.back() )
+            {
+            case '$':
+                return value_t{str_t{}};
+      
+            default:
+                return value_t{int_t{}};
+            };
         }
 
         void Clear()
@@ -511,10 +528,16 @@ namespace client
         
         constexpr auto if_stmt_op = []( auto& ctx ) {
             auto&& v = _attr( ctx );
-            const bool res = ToBoolImpl(v);
+            auto&& cond = at_c<0>( v );
+            auto&& gotoLine = at_c<1>( v );
+            const bool res = ToBoolImpl(cond);
             auto& action = x3::get<partial_parse_action_tag>( ctx ).get();
+            auto& runtime = x3::get<runtime_tag>( ctx ).get();
 
             action = res ? PartialParseAction::Continue : PartialParseAction::Discard;
+
+            if( action == PartialParseAction::Continue && gotoLine != MaxLineNum )
+                runtime.Goto(gotoLine );
         };
 
         constexpr auto goto_stmt_op = []( auto& ctx ) {
@@ -525,7 +548,7 @@ namespace client
         
         constexpr auto end_stmt_op = []( auto& ctx ) {
             auto& runtime = x3::get<runtime_tag>( ctx ).get();
-            runtime.Goto( std::numeric_limits<linenum_t>::max() );
+            runtime.Goto( MaxLineNum );
         };
 
         constexpr auto gosub_stmt_op = []( auto& ctx ) {
@@ -577,6 +600,8 @@ namespace client
         using x3::no_case;
         using x3::attr;
         using x3::eoi;
+        using x3::eps;
+        using x3::omit;
         
         using str_view = boost::iterator_range<std::string_view::const_iterator>;
 
@@ -636,19 +661,31 @@ namespace client
                 -(no_case["step"] >> expression)
             ) [for_stmt_op];
 
+        
+        //A straightforward approach here will have problems with reseting boost::optional<linenum_t> 
+        //during backtracking:
+        //  https://github.com/boostorg/spirit/issues/378
+        //  https://stackoverflow.com/a/49309385/3415353  
+        const auto if_stmt =
+            (no_case["if"] >> expression >> no_case["then"] >> x3::ulong_long)[if_stmt_op] |
+            (no_case["if"] >> expression >> -no_case["then"] >> attr(MaxLineNum))[if_stmt_op]
+        ;
+
         const auto instruction_def =
             no_case["text"] |
-            no_case["home"] |            
+            no_case["home"] |
+            no_case["cls"] |
             print_stmt |
             input_stmt |
-            (no_case["if"] >> expression >> -no_case["then"] )[if_stmt_op] |
+            if_stmt |
             no_case["goto"] >> x3::ulong_long[goto_stmt_op] |
             no_case["gosub"] >> x3::ulong_long[gosub_stmt_op] |
             no_case["return"][return_stmt_op] |
             for_stmt |
             return_stmt[next_stmt_op] |
             no_case["end"][end_stmt_op] |
-            no_case["dim"] >> identifier % ',' |
+            no_case["dim"] >> identifier % ',' | 
+            no_case["rem"] >> omit[x3::lexeme[+char_]] |
             (-no_case["let"] >> identifier >> '=' >> expression )[assing_var_op]
         ;
 
