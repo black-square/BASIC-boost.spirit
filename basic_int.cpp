@@ -50,6 +50,13 @@ namespace client
         }
     };
 
+    enum class ValueType
+    {
+        Int,
+        Float,
+        Str
+    };
+
     std::ostream& operator<<( std::ostream& os, const value_t& v )
     {
         struct Visitor
@@ -173,16 +180,16 @@ namespace client
             value_t res;
             const str_t* pS = boost::get<str_t>( &val );
 
-            switch( name.back() )
+            switch( DetectVarType(name) )
             {
-                case '$':
+                case ValueType::Str:
                     if( !pS )
                         throw std::runtime_error( "Expected String variable" );
 
                     res = std::move(val);
                     break;
 
-                case '%':
+                case ValueType::Int:
                     res = ForceInt( val );
                     break;
 
@@ -207,9 +214,9 @@ namespace client
 
             std::cout << "WARNING: Access var before init: " << name << std::endl;
 
-            switch( name.back() )
+            switch( DetectVarType(name) )
             {
-            case '$':
+            case ValueType::Str:
                 return value_t{str_t{}};
       
             default:
@@ -220,6 +227,22 @@ namespace client
         void Clear()
         {
             mVars.clear();
+        }
+        
+    public:
+        static ValueType DetectVarType( std::string_view str )
+        {
+            for( char c: str )
+            {
+                switch( c )
+                {
+                case '$': return ValueType::Str;
+                case '%': return ValueType::Int;
+                case '(': return ValueType::Float;
+                }
+            }
+
+            return ValueType::Float;
         }
 
     private:
@@ -332,14 +355,14 @@ namespace client
                 const char * const pEnd = pBeg + str.size();
                 char* pLast = nullptr;
               
-                switch( name.back() )
+                switch( DetectVarType(name) )
                 {
-                case '$':
+                case ValueType::Str:
                     res = std::move( str );
                     pLast = const_cast<char*>(pEnd);
                     break;
 
-                case '%':
+                case ValueType::Int:
                     res = static_cast<int_t>(std::strtol( pBeg, &pLast, 10 ));
                     break;
 
@@ -431,6 +454,24 @@ namespace client
             _val( ctx ) = _attr( ctx ); 
         };
 
+        constexpr auto append_op = []( auto& ctx )
+        {
+            auto& op1 = _val( ctx );
+            auto&& op2 = _attr( ctx );
+
+            op1 += op2;
+        };
+
+        constexpr auto append_idx_op = []( auto& ctx )
+        {
+            auto& op1 = _val( ctx );
+            auto&& op2 = _attr( ctx );
+
+            const auto idx = ForceInt(op2);
+
+            op1 += std::to_string( idx );
+        };
+
         constexpr auto cpy_int_op = []( auto& ctx )
         { 
             _val( ctx ) = static_cast<int_t>( _attr( ctx) ); 
@@ -438,13 +479,13 @@ namespace client
 
         constexpr auto eq_op = []( auto& ctx )
         {
-            auto&& op1 = _val( ctx );
+            auto& op1 = _val( ctx );
             auto&& op2 = _attr( ctx );
 
             const str_t* pS1 = boost::get<str_t>( &op1 );
             const str_t* pS2 = boost::get<str_t>( &op2 );
             
-            _val( ctx ) = int_t{ pS1 && pS2 ?
+            op1 = int_t{ pS1 && pS2 ?
                 *pS1 == *pS2 :
                 ForceFloat( op1 ) == ForceFloat( op2 )
             };
@@ -452,13 +493,13 @@ namespace client
 
         constexpr auto not_eq_op = []( auto& ctx )
         {
-            auto&& op1 = _val( ctx );
+            auto& op1 = _val( ctx );
             auto&& op2 = _attr( ctx );
 
             const str_t* pS1 = boost::get<str_t>( &op1 );
             const str_t* pS2 = boost::get<str_t>( &op2 );
 
-            _val( ctx ) = int_t{ pS1 && pS2 ?
+            op1 = int_t{ pS1 && pS2 ?
                 *pS1 != *pS2 :
                 ForceFloat( op1 ) != ForceFloat( op2 )
             };
@@ -466,10 +507,10 @@ namespace client
 
         constexpr auto add_op = []( auto & ctx )
         { 
-            auto && op1 = _val( ctx );
+            auto & op1 = _val( ctx );
             auto && op2 = _attr( ctx );
 
-            _val(ctx) = AddImpl( op1, op2 );
+            op1 = AddImpl( op1, op2 );
         };
 
         constexpr auto sub_op = []( auto& ctx )
@@ -534,7 +575,7 @@ namespace client
         constexpr auto left_op = []( auto& ctx ) {
            auto && [o1, o2] = _attr( ctx );
 
-            _val( ctx ) = ForceStr(o1).substr( 0, ForceInt( o2 ) );
+           _val( ctx ) = ForceStr(o1).substr( 0, ForceInt( o2 ) );
         };
 
         constexpr auto sqr_op = []( auto& ctx ) {
@@ -550,14 +591,6 @@ namespace client
         constexpr auto abs_op = []( auto& ctx ) {
             const auto& v = _attr( ctx );
             _val( ctx ) = std::fabs(ForceFloat(v));
-        };
-
-        constexpr auto array_acc_op = []( auto& ctx ) {
-            const auto &v = _attr( ctx );
-            const auto &s = at_c<0>( v );
-            const auto [o1, o2] = at_c<1>(v);
-            std::cout << s <<'[' << o1 << ',' << o2 << ']' << std::endl;
-            _val( ctx ) = ForceFloat(o1) * ForceFloat(o2);
         };
 
         constexpr auto print_op = []( auto& ctx ) 
@@ -709,6 +742,7 @@ namespace client
         x3::rule<class log_or, value_t> const log_or( "log_or" );
         x3::rule<class double_args, std::tuple<value_t, value_t>> const double_args( "double_args" );
         x3::rule<class identifier, std::string> const identifier( "identifier" );
+        x3::rule<class var_name, std::string> const var_name( "var_name" );
         x3::rule<class string_lit, std::string> const string_lit( "string_lit" );
         x3::rule<class instruction, value_t> const instruction( "instruction" );
         x3::rule<class line_parser, value_t> const line_parser( "line_parser" );
@@ -753,16 +787,16 @@ namespace client
         const auto input_stmt =  
             no_case["input"] >> 
                 (
-                    (string_lit >> ';' >> identifier)[input_op] |
-                    (attr(std::string{ "?" }) >> identifier)[input_op]
+                    (string_lit >> ';' >> var_name)[input_op] |
+                    (attr(std::string{ "?" }) >> var_name)[input_op]
                 ) >>
-                *( (',' >> attr( std::string{"??"} ) >> identifier)[input_op] );
+                *( (',' >> attr( std::string{"??"} ) >> var_name)[input_op] );
 
         const auto return_stmt_def =
-            no_case["next"] >> -identifier;
+            no_case["next"] >> -var_name;
 
         const auto for_stmt = 
-            (no_case["for"] >> identifier >> '=' >> expression >> no_case["to"] >> expression >>
+            (no_case["for"] >> var_name >> '=' >> expression >> no_case["to"] >> expression >>
                 -(no_case["step"] >> expression)
             ) [for_stmt_op];
 
@@ -797,12 +831,18 @@ namespace client
             no_case["end"][end_stmt_op] |
             no_case["dim"] >> omit[x3::lexeme[+char_]] |
             no_case["restore"][restore_stmt_op] |
-            no_case["read"] >> identifier[read_stmt_op] |
+            no_case["read"] >> var_name[read_stmt_op] |
             no_case["rem"] >> omit[x3::lexeme[+char_]] |
-            (-no_case["let"] >> identifier >> '=' >> expression )[assing_var_op]
+            (-no_case["let"] >> var_name >> '=' >> expression )[assing_var_op]
         ;
 
         const auto identifier_def = x3::raw[ x3::lexeme[(x3::alpha |  '_') >> *(x3::alnum | '_' ) >> -(lit('%') | '$') ]];
+
+        const auto var_name_def = 
+            identifier[cpy_op] >> 
+                char_('(')[append_op] >> expression[append_idx_op] % char_(',')[append_op] >> char_(')')[append_op] |
+            identifier[cpy_op]
+        ;
             
         const auto term_def =
             strict_float[cpy_op]      
@@ -816,8 +856,7 @@ namespace client
              | no_case["int"] >> single_arg[int_op]
              | no_case["abs"] >> single_arg[abs_op]
              | no_case["left$"] >> double_args[left_op]
-             | identifier[load_var_op]
-             | (identifier >> double_args)[array_acc_op]
+             | var_name[load_var_op]
             ;
 
         const auto exponent_def =
@@ -858,7 +897,7 @@ namespace client
             );
 
         BOOST_SPIRIT_DEFINE( exponent, mult_div, term, add_sub, relational, log_and, log_or, 
-            double_args, identifier, string_lit, instruction, line_parser, return_stmt
+            double_args, identifier, var_name, string_lit, instruction, line_parser, return_stmt
         );
 
         const auto calculator = expression;
@@ -1134,6 +1173,10 @@ BOOST_AUTO_TEST_CASE( line_parser_test )
     BOOST_TEST( calc( R"(x$ = "test":print x$)" ) == "test\n" );
     BOOST_TEST( calc( R"(x% = 12:print x%)" ) == "12\n" );
     BOOST_TEST( calc( R"(x% = 2.5:print x%)" ) == "2\n" );
+
+    BOOST_TEST( calc( R"(a(2+1)=42 : print a(3);)" ) == "42" );
+    BOOST_TEST( calc( R"(n = 3: a(3, 8)=42*2 : print a(n, n*2+2);)" ) == "84" );
+    BOOST_TEST( calc( R"(n = 3: a(2, n*2)=43 : b( a(2,6), 1,2,3) = 400/4 : print b(43, 1,   2, 3);)" ) == "100" );
 
     BOOST_TEST( calc( R"(if 1=1 then print "OK")" ) == "OK\n" );
     BOOST_TEST( calc( R"(if 0=1 then print "OK")" ) == 0 );
