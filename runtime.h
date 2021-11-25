@@ -49,28 +49,12 @@ namespace runtime
 
     struct runtime_tag;
 
-    class RuntimeBase
+    class Runtime
     {
     public:
         void Store( std::string name, value_t val );
+        value_t Load( std::string name ) const;
 
-        value_t Load( std::string name );
-
-        void Clear()
-        {
-            mVars.clear();
-        }
-
-    public:
-        static ValueType DetectVarType( std::string_view str );
-
-    private:
-        std::unordered_map<std::string, value_t> mVars;
-    };
-
-    class Runtime : public RuntimeBase
-    {
-    public:
         void AddLine( linenum_t line, std::string_view str );
 
         std::tuple<const std::string*, linenum_t> GetNextLine();
@@ -102,6 +86,10 @@ namespace runtime
         }
 
         void Next( const std::string& varName );
+
+        void DefineFuntion( std::string fncName, std::string varName, std::string exprStr );
+
+        value_t CallFuntion( std::string fncName, value_t arg ) const;
 
         template<class T>
         void Print( T&& val ) const
@@ -141,6 +129,8 @@ namespace runtime
         void Clear();
 
     private:
+        static ValueType DetectVarType( std::string_view str );
+
         struct ForLoopItem
         {
             std::string varName;
@@ -149,7 +139,15 @@ namespace runtime
             linenum_t startBodyLine;
         };
 
+        struct FunctionInfo
+        {
+            std::string varName;
+            std::string exprStr;
+        };
+
     private:
+        std::unordered_map<std::string, value_t> mVars;
+        std::map<std::string, FunctionInfo, std::less<>> mFunctions;
         std::map<linenum_t, std::string> mProgram;
         std::vector<ForLoopItem> mForLoopStack;
         std::vector<linenum_t> mGosubStack;
@@ -158,6 +156,26 @@ namespace runtime
         std::vector<value_t> mData;
         size_t mCurDataIdx = 0;
 
+    };
+
+    class FunctionRuntime
+    {
+    public:
+        static value_t Calculate( const Runtime& rootRuntime, std::string_view exprStr, std::string_view varName, value_t varValue );
+        value_t Load( std::string name ) const;
+        value_t CallFuntion( std::string fncName, value_t arg ) const 
+        { 
+            return mRootRuntime.CallFuntion( std::move(fncName), std::move(arg) );
+        }
+
+    private:
+        FunctionRuntime( const Runtime &rootRuntime, std::string_view varName, value_t varValue ) : 
+            mRootRuntime{ rootRuntime }, mVarName{ varName }, mVarValue{ varValue } {}
+
+    private:
+        const Runtime& mRootRuntime;
+        std::string_view mVarName;
+        value_t mVarValue;
     };
 
     class TestRuntime : public runtime::Runtime

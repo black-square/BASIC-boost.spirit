@@ -254,8 +254,29 @@ namespace actions
         auto&& step = at_c<3>( v );
         auto& runtime = x3::get<runtime_tag>( ctx ).get();
 
-        runtime.ForLoop( name, initVal, endVal, step ? std::move( *step ) : value_t{ int_t{1} } );
+        runtime.ForLoop( std::move(name), std::move(initVal), std::move(endVal), step ? std::move( *step ) : value_t{ int_t{1} } );
     };
+
+    constexpr auto def_stmt_op = []( auto& ctx ) {
+        auto&& v = _attr( ctx );
+        auto&& fncName = at_c<0>( v );
+        auto&& varName = at_c<1>( v );
+        auto&& exprStr = at_c<2>( v );
+        auto& runtime = x3::get<runtime_tag>( ctx ).get();
+
+        runtime.DefineFuntion( std::move(fncName), std::move(varName), std::move(exprStr) );
+    };     
+    
+    constexpr auto call_fn_op = []( auto& ctx ) {
+        auto&& v = _attr( ctx );
+        auto&& fncName = at_c<0>( v );
+        auto&& arg = at_c<1>( v );
+        auto& runtime = x3::get<runtime_tag>( ctx ).get();
+
+        _val( ctx ) = runtime.CallFuntion( std::move(fncName), std::move(arg) );
+    };
+
+
 
     constexpr auto next_stmt_op = []( auto& ctx ) {
         auto&& v = _attr( ctx );

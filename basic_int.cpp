@@ -5,11 +5,15 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <fstream>
 
+#ifdef _WIN32
+    #include <Windows.h>
+#endif
+
 void InteractiveMode()
 {                                            
-    std::cout << "-------------------------\n";
+    std::cout << "\033[96m" "-------------------------\n";
     std::cout << "Interactive mode\n";
-    std::cout << "-------------------------\n";
+    std::cout << "-------------------------\n" "\033[0m";
 
     runtime::TestExecutor calc{ main_pass::line_rule() };
 
@@ -41,10 +45,10 @@ bool Preparse( const char* szFileName, runtime::Runtime &runtime )
 
         if( !runtime::Parse( str, preparse::line_rule(), runtime, res, err ) )
         {
-            std::cout << "-------------------------\n";
-            std::cout << "Preparse failed\n" << str << "\n";
-            std::cout << "Error: \"" << err << "\"\n";
-            std::cout << "-------------------------\n";
+            std::cerr << "\033[91m" "-------------------------\n";
+            std::cerr << "Preparse failed\n" << str << "\n";
+            std::cerr << "Error: \"" << err << "\"\n";
+            std::cerr << "-------------------------\n" "\033[0m";
 
             return false;
         }
@@ -67,10 +71,10 @@ bool Execute( runtime::Runtime& runtime )
 
         if( !runtime::Parse( *pStr, main_pass::line_rule(), runtime, res, err ) )
         {
-            std::cout << "-------------------------\n";
-            std::cout << "Execute failed\n" << lineNum << '\t' << *pStr << "\n";
-            std::cout << "Error: " << err << "\n";
-            std::cout << "-------------------------\n";
+            std::cerr << "\033[91m" "-------------------------\n";
+            std::cerr << "Execute failed\n" << lineNum << '\t' << *pStr << "\n";
+            std::cerr << "Error: " << err << "\n";
+            std::cerr << "-------------------------\n" "\033[0m";
             return false;
         }
     }
@@ -85,15 +89,22 @@ int main(int argc, char* argv[])
 
     RunTests(argv[0]);
 
+#ifdef _WIN32
+    const HANDLE hConsole = GetStdHandle( STD_OUTPUT_HANDLE );
+    DWORD dwMode = 0;
+    GetConsoleMode( hConsole, &dwMode );
+    SetConsoleMode( hConsole, dwMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING );
+#endif
+
     runtime::Runtime runtime;
 
     for( int i = 1; i < argc; ++i )
     {
         if( boost::algorithm::ends_with( argv[i], ".input" ) )
         {
-            std::cout << "-------------------------\n";
+            std::cout << "\033[96m" "-------------------------\n";
             std::cout << "Read input: " << argv[i] << std::endl;
-            std::cout << "-------------------------\n";
+            std::cout << "-------------------------\n" "\033[0m";
 
             std::ifstream flIn( argv[i] );
             std::string str;
@@ -104,16 +115,16 @@ int main(int argc, char* argv[])
             continue;
         }
 
-        std::cout << "-------------------------\n";
+        std::cout << "\033[96m" "-------------------------\n";
         std::cout << "Running: " << argv[i] << std::endl;
-        std::cout << "-------------------------\n";
+        std::cout << "-------------------------\n" "\033[0m";
 
         bool res = Preparse( argv[i], runtime );
 
         if( res )
             res = Execute( runtime );
 
-        std::cout << std::endl << (res ? "[SUCCESS]": "[FAIL]")  << std::endl << std::endl;
+        std::cout << std::endl << (res ? "\033[92m" "[SUCCESS]" "\033[0m" : "\033[91m" "[FAILURE]" "\033[0m")  << std::endl << std::endl;
 
         runtime.Clear();
     }

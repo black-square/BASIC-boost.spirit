@@ -1,4 +1,6 @@
 #include "runtime.h"
+#include "parse_utils.hpp"
+#include "grammar.h"
 
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
@@ -92,7 +94,7 @@ bool ToBoolImpl( const value_t& v )
     return boost::apply_visitor( Impl{}, v );
 }
 
-void RuntimeBase::Store( std::string name, value_t val )
+void Runtime::Store( std::string name, value_t val )
 {
     if( name.empty() )
         throw std::runtime_error( "variable name cannot be empty" );
@@ -122,19 +124,19 @@ void RuntimeBase::Store( std::string name, value_t val )
     mVars[name] = res;
 }
 
-value_t RuntimeBase::Load( std::string name )
+value_t Runtime::Load( std::string name ) const
 {
     if( name.empty() )
         throw std::runtime_error( "variable name cannot be empty" );
 
     boost::algorithm::to_lower( name );
 
-    const auto it = mVars.find( name );
+    const auto itVar = mVars.find( name );
 
-    if( it != mVars.end() )
-        return it->second;
+    if( itVar != mVars.end() )
+        return itVar->second;
 
-    std::cout << "WARNING: Access var before init: " << name << std::endl;
+    std::cerr << "\033[91m" "WARNING: Access var before init: " "\033[0m"  << name << std::endl;
 
     switch( DetectVarType( name ) )
     {
@@ -146,7 +148,7 @@ value_t RuntimeBase::Load( std::string name )
     };
 }
 
-ValueType RuntimeBase::DetectVarType( std::string_view str )
+ValueType Runtime::DetectVarType( std::string_view str )
 {
     for( char c : str )
     {
@@ -202,6 +204,27 @@ void Runtime::Next( const std::string& varName )
         Goto( cur.startBodyLine );
     else
         mForLoopStack.pop_back();
+}
+
+void Runtime::DefineFuntion( std::string fncName, std::string varName, std::string exprStr )
+{
+    boost::algorithm::to_lower( fncName );
+    boost::algorithm::to_lower( varName );
+
+    mFunctions.insert_or_assign( std::move( fncName ), FunctionInfo{ std::move( varName ), std::move( exprStr ) } );
+}
+
+value_t Runtime::CallFuntion( std::string fncName, value_t arg ) const
+{
+    boost::algorithm::to_lower( fncName );
+
+    const auto it = mFunctions.find( fncName );
+
+    if( it == mFunctions.end() )
+        throw std::runtime_error("Unknown function name " + fncName );
+
+
+    return FunctionRuntime::Calculate( *this, it->second.exprStr, it->second.varName, std::move(arg) );
 }
 
 void Runtime::Input( const std::string& prompt, const std::string& name )
@@ -267,7 +290,8 @@ void Runtime::Read( std::string name )
 
 void Runtime::Clear()
 {
-    RuntimeBase::Clear();
+    mVars.clear();
+    mFunctions.clear();
     mProgram.clear();
     mForLoopStack.clear();
     mGosubStack.clear();
@@ -275,6 +299,35 @@ void Runtime::Clear()
     mCurLine = 0;
     mData.clear();
     mCurDataIdx = 0;
+}
+
+value_t FunctionRuntime::Calculate( const Runtime& rootRuntime, std::string_view exprStr, std::string_view varName, value_t varValue )
+{
+    FunctionRuntime runtime{ rootRuntime, varName, std::move(varValue) };
+
+    std::string err{};
+    value_t res;
+
+    if( !Parse( exprStr, main_pass::expression_rule(), runtime, res, err ) )
+    {
+        std::cerr << "\033[91m" "-------------------------\n";
+        std::cerr << "Function execution failed\n" << exprStr << "\n";
+        std::cerr << "Error: " << err << "\n";
+        std::cerr << "-------------------------\n" "\033[0m";
+        throw std::runtime_error( "Function execution failed" );
+    }
+
+    return res;
+}
+
+main_pass::value_t FunctionRuntime::Load( std::string name ) const
+{
+    boost::to_lower(name);
+
+    if( name != mVarName )
+        throw std::runtime_error( "Unknown variable inside the function body: " + name );
+
+    return mVarValue;
 }
 
 }

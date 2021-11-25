@@ -62,8 +62,11 @@ namespace runtime
 
             if( cur != end )
             {
-                err += " pos> ";
+                err += " \"";
+                err.append( str.begin(), cur );
+                err += "><";
                 err.append( cur, end );
+                err += "\"";
             }
 
             return false;
