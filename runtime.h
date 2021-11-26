@@ -14,17 +14,17 @@ namespace runtime
 {
     std::ostream& operator<<( std::ostream& os, const value_t& v );
 
-    // All arithmetic operations are done in floating point.No matter what
-    // the operands to + , -, *, / , and^ are, they will be converted to floating
-    // point.The functions SIN, COS, ATN, TAN, SQR, LOG, EXPand RND also
-    // convert their arguments to floating point and give the result as such.
+    // "All arithmetic operations are done in floating point.No matter what
+    //  the operands to + , -, *, / , and^ are, they will be converted to floating
+    //  point.The functions SIN, COS, ATN, TAN, SQR, LOG, EXPand RND also
+    //  convert their arguments to floating point and give the result as such."
     float_t ForceFloat( const value_t& v );
 
-    // The operators AND, OR, NOT force both operands to be integers between
-    // -32767 and +32767 before the operation occurs.
-    // When a number is converted to an integer, it is truncated (rounded down).
-    // It will perform as if INT function was applied.No automatic conversion is 
-    // done between strings and numbers
+    // "The operators AND, OR, NOT force both operands to be integers between
+    //  -32767 and +32767 before the operation occurs.
+    //  When a number is converted to an integer, it is truncated (rounded down).
+    //  It will perform as if INT function was applied.No automatic conversion is 
+    //  done between strings and numbers"
     int_t ForceInt( const value_t& v );
 
     const str_t& ForceStr( const value_t& v );
@@ -38,14 +38,7 @@ namespace runtime
     using linenum_t = unsigned long long;
     constexpr linenum_t MaxLineNum = std::numeric_limits<linenum_t>::max();
 
-    struct partial_parse_action_tag;
-
-    enum class PartialParseAction
-    {
-        Undefined,
-        Continue,
-        Discard
-    };
+    struct line_begin_tag;
 
     struct runtime_tag;
 
@@ -56,17 +49,22 @@ namespace runtime
         value_t Load( std::string name ) const;
 
         void AddLine( linenum_t line, std::string_view str );
+        void AppendToPrevLine( std::string_view str );
 
-        std::tuple<const std::string*, linenum_t> GetNextLine();
+        std::tuple<const std::string*, linenum_t, unsigned> GetNextLine();
 
-        void Goto( linenum_t line )
+        void Goto( linenum_t line );
+
+        void GotoNextLine()
         {
-            mCurLine = line;
+            GotoImpl( { mProgramCounter.line + 1, 0 } );
         }
 
-        void Gosub( linenum_t line )
+        void Gosub( linenum_t line, unsigned currentLineOffset )
         {
-            mGosubStack.push_back( mCurLine );
+            const ProgramCounter pc{ mProgramCounter.line, currentLineOffset };
+
+            mGosubStack.push_back( pc );
             Goto( line );
         }
 
@@ -75,17 +73,13 @@ namespace runtime
             if( mGosubStack.empty() )
                 throw std::runtime_error( "Mismatched GOSUB/RETURN statement" );
 
-            Goto( mGosubStack.back() );
+            GotoImpl( mGosubStack.back() );
             mGosubStack.pop_back();
         }
 
-        void ForLoop( std::string varName, value_t initVal, value_t targetVal, value_t stepVal )
-        {
-            Store( varName, std::move( initVal ) );
-            mForLoopStack.push_back( { std::move( varName ), std::move( targetVal ), std::move( stepVal ), mCurLine } );
-        }
+        void ForLoop( std::string varName, value_t initVal, value_t targetVal, value_t stepVal, unsigned currentLineOffset );
 
-        void Next( const std::string& varName );
+        void Next( std::vector<std::string> varNames );
 
         void DefineFuntion( std::string fncName, std::string varName, std::string exprStr );
 
@@ -126,17 +120,35 @@ namespace runtime
             mCurDataIdx = 0;
         }
 
+        void ClearProgram();
+        
         void Clear();
 
+        void Start();
+
+        bool IsExpectedToContinueLineExecution() const
+        {
+            return mProgramCounter.lineOffset == ProgramCounter::ContinueExecution;
+        }
+
     private:
-        static ValueType DetectVarType( std::string_view str );
+        struct ProgramCounter
+        {
+            static constexpr unsigned LineOffsetBits = 16;
+            static constexpr unsigned ContinueExecution = ~(~unsigned(0) << LineOffsetBits);
+
+            linenum_t line: sizeof(linenum_t) * CHAR_BIT - LineOffsetBits;
+            linenum_t lineOffset: LineOffsetBits;
+        };
+
+        static_assert( sizeof(ProgramCounter) == sizeof(linenum_t) );
 
         struct ForLoopItem
         {
             std::string varName;
             value_t targetVal;
             value_t stepVal;
-            linenum_t startBodyLine;
+            ProgramCounter startBodyPC;
         };
 
         struct FunctionInfo
@@ -145,14 +157,23 @@ namespace runtime
             std::string exprStr;
         };
 
+        void GotoImpl( ProgramCounter pc )
+        {
+            mProgramCounter = pc;
+        }
+
+        bool NextImpl( std::string varName );
+
+        static ValueType DetectVarType( std::string_view str );
+
     private:
         std::unordered_map<std::string, value_t> mVars;
         std::map<std::string, FunctionInfo, std::less<>> mFunctions;
         std::map<linenum_t, std::string> mProgram;
         std::vector<ForLoopItem> mForLoopStack;
-        std::vector<linenum_t> mGosubStack;
+        std::vector<ProgramCounter> mGosubStack;
         std::deque<std::string> mFakeInput;
-        linenum_t mCurLine = 0;
+        ProgramCounter mProgramCounter = {};
         std::vector<value_t> mData;
         size_t mCurDataIdx = 0;
 
@@ -166,6 +187,11 @@ namespace runtime
         value_t CallFuntion( std::string fncName, value_t arg ) const 
         { 
             return mRootRuntime.CallFuntion( std::move(fncName), std::move(arg) );
+        }
+
+        bool IsExpectedToContinueLineExecution() const
+        {
+            return true;
         }
 
     private:
@@ -193,9 +219,10 @@ namespace runtime
             ClearOutput();
         }
 
-        void ClearOutput()
+        void Start()
         {
-            mStrOut.str( "" );
+            Runtime::Start();
+            ClearOutput();
         }
 
         std::string GetOutput() const
@@ -204,6 +231,11 @@ namespace runtime
         }
 
     private:
+        void ClearOutput()
+        {
+            mStrOut.str( "" );
+        }
+
         std::stringstream mStrOut;
     };
 }

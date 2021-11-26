@@ -100,10 +100,16 @@ BOOST_AUTO_TEST_CASE( line_parser_test )
     BOOST_TEST( calc( R"(if 2 then if 2 - 1 * 2 then x$ = "OK": print x$;)" ) == 0 );
     BOOST_TEST( calc( R"(if 2 then if 2 - 1 * 3 then x$ = "OK": print x$;)" ) == "OK" );
 
+    // "If several statements occur after the THEN, separated by colons, 
+    //  then they will be executed if and only if the expression is true."
+    BOOST_TEST( calc( R"(if 0 then print "false":print "next")" ) == 0 );
+    
     BOOST_TEST( calc( R"(DEF FN A(w) = 2 * W + W: PRINT FN A(23);)" ) == "69" );
     BOOST_TEST( calc( R"(DEF FNB(X) = 4 + 3: G = FNB(23): PRINT G;)" ) == "7" );
     BOOST_TEST( calc( R"(DEF FNB(X) = 4 + 3: DEF FNA(Y) = FNB(1000) + Y: PRINT FNA(100);)" ) == "107" );
     BOOST_TEST( calc( R"(DEF FNB(X) = X * X: DEF FNA(Y) = FNB(Y) * 3: PRINT FNA(10);)" ) == "300" );
+
+    BOOST_TEST( calc( R"(print "before": for i=1 to 3: print "body": next:print "after")" ) == "before\nbody\nbody\nbody\nafter\n" );
 }
 
 

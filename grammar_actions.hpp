@@ -2,10 +2,18 @@
 #define BASIC_INT_GRAMMAR_ACTIONS_H
 
 #include "platform.h"
+#include "runtime.h"
 
 namespace actions
 {
     using boost::fusion::at_c;
+
+    template< class CtxT >
+    auto GetPos( const CtxT &ctx )
+    {
+        namespace x3 = boost::spirit::x3;
+        return x3::_where( ctx ).begin() - x3::get<runtime::line_begin_tag>( ctx );
+    }
 
     constexpr auto cpy_op = []( auto& ctx )
     {
@@ -143,7 +151,12 @@ namespace actions
 
     constexpr auto int_op = []( auto& ctx ) {
         const auto& v = _attr( ctx );
-        _val( ctx ) = ForceInt( v );
+        float_t val = ForceFloat( v );
+
+        if ( val < 0 )
+            val -= 0.5f;
+
+        _val( ctx ) = static_cast<int_t>(val);
     };
 
     constexpr auto abs_op = []( auto& ctx ) {
@@ -205,12 +218,17 @@ namespace actions
         auto&& cond = at_c<0>( v );
         auto&& gotoLine = at_c<1>( v );
         const bool res = ToBoolImpl( cond );
-        auto& action = x3::get<partial_parse_action_tag>( ctx ).get();
         auto& runtime = x3::get<runtime_tag>( ctx ).get();
 
-        action = res ? PartialParseAction::Continue : PartialParseAction::Discard;
+        if( !res )
+        {
+            // "If several statements occur after the THEN, separated by colons, 
+            //  then they will be executed if and only if the expression is true."
+            runtime.GotoNextLine();
+            return;
+        }
 
-        if( action == PartialParseAction::Continue && gotoLine != MaxLineNum )
+        if( gotoLine != MaxLineNum )
             runtime.Goto( gotoLine );
     };
 
@@ -227,12 +245,14 @@ namespace actions
 
     constexpr auto on_goto_stmt_op = []( auto& ctx ) {
         auto& runtime = x3::get<runtime_tag>( ctx ).get();
-        runtime.Goto( on_stmt_impl_op( ctx ) );
+        runtime.Goto( on_stmt_impl_op(ctx) );
     };
 
     constexpr auto on_gosub_stmt_op = []( auto& ctx ) {
         auto& runtime = x3::get<runtime_tag>( ctx ).get();
-        runtime.Gosub( on_stmt_impl_op( ctx ) );
+        const auto lineOffset = GetPos( ctx );
+
+        runtime.Gosub( on_stmt_impl_op( ctx ), lineOffset );
     };
 
     constexpr auto goto_stmt_op = []( auto& ctx ) {
@@ -246,20 +266,28 @@ namespace actions
         runtime.Goto( MaxLineNum );
     };
 
+    constexpr auto stop_stmt_op = []( auto& ctx ) {
+        std::exit(100);
+    };
+
     constexpr auto restore_stmt_op = []( auto& ctx ) {
         auto& runtime = x3::get<runtime_tag>( ctx ).get();
+
         runtime.Restore();
     };
 
     constexpr auto gosub_stmt_op = []( auto& ctx ) {
         auto&& v = _attr( ctx );
-        auto& runtime = x3::get<runtime_tag>( ctx ).get();
-        runtime.Gosub( v );
+        auto& runtime = x3::get<runtime_tag>( ctx ).get();      
+        const auto lineOffset = GetPos(ctx);
+
+        runtime.Gosub( v, lineOffset );
     };
 
     constexpr auto return_stmt_op = []( auto& ctx ) {
         auto&& v = _attr( ctx );
         auto& runtime = x3::get<runtime_tag>( ctx ).get();
+
         runtime.Return();
     };
 
@@ -270,8 +298,10 @@ namespace actions
         auto&& endVal = at_c<2>( v );
         auto&& step = at_c<3>( v );
         auto& runtime = x3::get<runtime_tag>( ctx ).get();
+        const auto lineOffset = GetPos( ctx );
 
-        runtime.ForLoop( std::move(name), std::move(initVal), std::move(endVal), step ? std::move( *step ) : value_t{ int_t{1} } );
+        runtime.ForLoop( std::move(name), std::move(initVal), std::move(endVal), 
+                        step ? std::move( *step ) : value_t{ int_t{1} }, lineOffset );
     };
 
     constexpr auto def_stmt_op = []( auto& ctx ) {
@@ -296,7 +326,7 @@ namespace actions
     constexpr auto next_stmt_op = []( auto& ctx ) {
         auto&& v = _attr( ctx );
         auto& runtime = x3::get<runtime_tag>( ctx ).get();
-        runtime.Next( v );
+        runtime.Next( std::move(v) );
     };
 
     constexpr auto input_op = []( auto& ctx ) {
@@ -312,8 +342,15 @@ namespace actions
         auto& runtime = x3::get<runtime_tag>( ctx ).get();
         auto&& [line, str] = _attr( ctx );
 
-        if( !str.empty() )
-            runtime.AddLine( line, str );
+        runtime.AddLine( line, str );
+    };
+
+    constexpr auto append_line_op = []( auto& ctx )
+    {
+        auto& runtime = x3::get<runtime_tag>( ctx ).get();
+        auto&& str = _attr( ctx );
+
+        runtime.AppendToPrevLine( str );
     };
 
     constexpr auto data_op = []( auto& ctx )

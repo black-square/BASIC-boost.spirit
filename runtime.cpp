@@ -165,23 +165,70 @@ ValueType Runtime::DetectVarType( std::string_view str )
 
 void Runtime::AddLine( linenum_t line, std::string_view str )
 {
-    mProgram.emplace( line, str );
+    const auto &[_, success] =  mProgram.emplace( line, str );
+
+    if( !success )
+        throw std::runtime_error( "Line was redefined " + std::to_string( line ) );
+
+    mProgramCounter.line = line;
 }
 
-std::tuple<const std::string*, linenum_t> Runtime::GetNextLine()
+void Runtime::AppendToPrevLine( std::string_view str )
 {
-    const auto it = mProgram.lower_bound( mCurLine );
+    const auto it = mProgram.find( mProgramCounter.line );
 
     if( it == mProgram.end() )
-        return {};
+        throw std::runtime_error( "Previous line is unavailable" );
 
-    Goto( it->first + 1 );
-
-    return { &it->second, it->first };
+    it->second.append(" : ");
+    it->second.append( str );
 }
 
-void Runtime::Next( const std::string& varName )
+std::tuple<const std::string*, linenum_t, unsigned> Runtime::GetNextLine()
 {
+    decltype(mProgram)::const_iterator it{};
+    
+    for(;;)
+    {
+        it = mProgram.lower_bound( mProgramCounter.line );
+
+        if( it == mProgram.end() )
+            return {};
+
+        for( unsigned offset = mProgramCounter.lineOffset; offset < it->second.length(); ++offset )
+            if( !std::isspace(it->second[offset]) )
+            {
+                GotoImpl( {mProgramCounter.line, ProgramCounter::ContinueExecution} );
+                return { &it->second, it->first, offset };
+            }         
+
+        GotoImpl( {it->first + 1, 0} );
+     }   
+}
+
+void Runtime::Goto( linenum_t line )
+{
+    if( line != MaxLineNum && mProgram.find(line) == mProgram.end() )
+        throw std::runtime_error("Unknown line " + std::to_string( line ) );
+
+    GotoImpl( { line, 0 } );
+}
+
+void Runtime::ForLoop( std::string varName, value_t initVal, value_t targetVal, value_t stepVal, unsigned currentLineOffset )
+{
+    Store( varName, std::move( initVal ) );
+
+    const ProgramCounter pc{ mProgramCounter.line, currentLineOffset };
+
+    boost::algorithm::to_lower( varName );
+
+    mForLoopStack.push_back( { std::move( varName ), std::move( targetVal ), std::move( stepVal ), pc } );
+}
+
+bool Runtime::NextImpl( std::string varName )
+{
+    boost::algorithm::to_lower( varName );
+
     for( ;; )
     {
         if( mForLoopStack.empty() )
@@ -198,17 +245,33 @@ void Runtime::Next( const std::string& varName )
     curVal = AddImpl( curVal, cur.stepVal );
     Store( cur.varName, curVal );
 
-    const int_t eqRes = LessEqImpl( curVal, cur.targetVal );
+    const int_t eqRes = ForceFloat( cur.stepVal ) < 0 ?
+        LessEqImpl( cur.targetVal, curVal ) :
+        LessEqImpl( curVal, cur.targetVal );
 
     if( eqRes != 0 )
     {
-        if( cur.startBodyLine >= mCurLine )
-            throw std::runtime_error("Same line NEXT isn't supported");
-
-        Goto( cur.startBodyLine );
+        GotoImpl( cur.startBodyPC );
+        return true;
     }
     else
+    {
         mForLoopStack.pop_back();
+        return false;
+    }
+}
+
+void Runtime::Next( std::vector<std::string> varNames )
+{
+    if( varNames.empty() )
+    {
+        NextImpl( {} );
+        return;
+    }
+
+    for( auto &varName : varNames )
+        if( NextImpl( std::move(varName) ) )
+            return;
 }
 
 void Runtime::DefineFuntion( std::string fncName, std::string varName, std::string exprStr )
@@ -293,15 +356,27 @@ void Runtime::Read( std::string name )
     ++mCurDataIdx;
 }
 
-void Runtime::Clear()
+void Runtime::Start()
 {
-    mVars.clear();
-    mFunctions.clear();
+    //We need the deterministic rand() for automation
+    std::srand( 0 );
+    mProgramCounter = {};
+}
+
+void Runtime::ClearProgram()
+{
     mProgram.clear();
     mForLoopStack.clear();
     mGosubStack.clear();
-    mFakeInput.clear();
-    mCurLine = 0;
+    mProgramCounter = {};
+}
+
+void Runtime::Clear()
+{
+    ClearProgram();
+    mVars.clear();
+    mFunctions.clear();
+    mFakeInput.clear();  
     mData.clear();
     mCurDataIdx = 0;
 }
@@ -313,7 +388,7 @@ value_t FunctionRuntime::Calculate( const Runtime& rootRuntime, std::string_view
     std::string err{};
     value_t res;
 
-    if( !Parse( exprStr, main_pass::expression_rule(), runtime, res, err ) )
+    if( !Parse( exprStr, 0, main_pass::expression_rule(), runtime, res, err ) )
     {
         std::cerr << "\033[91m" "-------------------------\n";
         std::cerr << "Function execution failed\n" << exprStr << "\n";

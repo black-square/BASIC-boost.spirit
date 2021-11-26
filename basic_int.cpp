@@ -41,7 +41,7 @@ bool Preparse( const char* szFileName, runtime::Runtime &runtime )
         boost::spirit::x3::unused_type res{};
         std::string err{};
 
-        if( !runtime::Parse( str, preparse::line_rule(), runtime, res, err ) )
+        if( !runtime::Parse( str, 0, preparse::line_rule(), runtime, res, err ) )
         {
             std::cerr << "\033[91m" "-------------------------\n";
             std::cerr << "Preparse failed\n" << str << "\n";
@@ -57,11 +57,11 @@ bool Preparse( const char* szFileName, runtime::Runtime &runtime )
 
 bool Execute( runtime::Runtime& runtime )
 {
-    std::srand(0); //We need the deterministic rand() for automation
+    runtime.Start();
 
     for(;;) 
     {
-        const auto [pStr, lineNum] = runtime.GetNextLine();
+        const auto [pStr, lineNum, offset] = runtime.GetNextLine();
 
         if( !pStr )
             return true;
@@ -69,7 +69,7 @@ bool Execute( runtime::Runtime& runtime )
         runtime::value_t res{};
         std::string err{};
 
-        if( !runtime::Parse( *pStr, main_pass::line_rule(), runtime, res, err ) )
+        if( !runtime::Parse( *pStr, offset, main_pass::line_rule(), runtime, res, err ) )
         {
             std::cerr << "\033[91m" "-------------------------\n";
             std::cerr << "Execute failed\n" << lineNum << '\t' << *pStr << "\n";

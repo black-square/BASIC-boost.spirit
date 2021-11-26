@@ -49,11 +49,11 @@ namespace main_pass
     const auto string_lit_def =
         lexeme['"' >> *~quote >> '"'];
 
-    const auto line_def =
-        instruction % ':';
-
     const auto instruction_end =
         ':' | eoi;
+
+    const auto line_def =
+        *lit(':') >> instruction;
 
     const auto single_arg =
         '(' >> expression >> ')';
@@ -86,7 +86,8 @@ namespace main_pass
         *((',' >> attr( std::string{ "??" } ) >> var_name)[input_op]);
 
     const auto next_stmt_def =
-        no_case["next"] >> -var_name;
+        no_case["next"] >> (var_name % ',')[next_stmt_op] |
+        no_case["next"] >> attr( std::vector<std::string>{} )[next_stmt_op];
 
     const auto for_stmt =
         (no_case["for"] >> var_name >> '=' >> expression >> no_case["to"] >> expression >>
@@ -112,6 +113,7 @@ namespace main_pass
         no_case["text"] |
         no_case["home"] |
         no_case["cls"] |
+        no_case["stop"][stop_stmt_op] |
         print_stmt |
         input_stmt |
         if_stmt |
@@ -120,11 +122,11 @@ namespace main_pass
         no_case["gosub"] >> line_num[gosub_stmt_op] |
         no_case["return"][return_stmt_op] |
         for_stmt |
-        next_stmt[next_stmt_op] |
+        next_stmt |
         no_case["end"][end_stmt_op] |
         no_case["dim"] >> omit[lexeme[+char_]] |
         no_case["restore"][restore_stmt_op] |
-        no_case["read"] >> var_name[read_stmt_op] |
+        no_case["read"] >> var_name[read_stmt_op] % ',' |
         no_case["rem"] >> omit[lexeme[*char_]] |
         no_case["def"] >> no_case["fn"] >> (identifier >> '(' >> identifier >> ')' >> '=' >> lexeme[+~char_(':')])[def_stmt_op] |
         (-no_case["let"] >> var_name >> '=' >> expression)[assing_var_op]
@@ -213,6 +215,7 @@ namespace preparse
     using x3::char_;
     using x3::int_;
     using x3::eoi;
+    using x3::attr;
     using x3::no_case;
     using x3::omit;
     using x3::lexeme;
@@ -221,6 +224,7 @@ namespace preparse
     using main_pass::string_lit;
 
     x3::rule<class line> const line( "line" );
+    x3::rule<class instruction> const instruction( "instruction" );
     x3::rule<class num_line, std::tuple<linenum_t, std::string>> const num_line( "num_line" );
 
     const auto data_stmt =
@@ -230,19 +234,20 @@ namespace preparse
             string_lit[data_op]
             ) % ',';
 
-    const auto num_line_def =
-        line_num >> lexeme[+char_];
-
-    const auto instruction =
+    const auto instruction_def =
         no_case["rem"] >> omit[lexeme[*char_]] |
         data_stmt;
 
+    const auto num_line_def =
+        line_num >> instruction % ':' >> attr(std::string{}) |
+        line_num >> lexeme[+char_];
+
     const auto line_def =
-        line_num >> instruction % ':' |
         num_line[add_num_line_op] |
+        ':' >> lexeme[+char_][append_line_op] |
         eoi;
 
-    BOOST_SPIRIT_DEFINE( line, num_line );
+    BOOST_SPIRIT_DEFINE( line, instruction, num_line );
 
     line_type line_rule()
     {
@@ -257,12 +262,12 @@ using phrase_context_type = x3::phrase_parse_context<x3::ascii::space_type>::typ
 
 template<class RuntimeT>
 using context_type = x3::context<
-    partial_parse_action_tag, std::reference_wrapper<runtime::PartialParseAction>,   
-    x3::context<
-        runtime_tag, std::reference_wrapper<RuntimeT>,
-        phrase_context_type
-    >
->;
+    line_begin_tag, iterator_type,  
+        x3::context<
+            runtime_tag, std::reference_wrapper<RuntimeT>,
+            phrase_context_type
+        >
+    >;
  
 namespace main_pass
 {

@@ -9,18 +9,14 @@
 namespace runtime
 {
     template< class ParserT, class RuntimeT, class ResultT>
-    bool Parse( std::string_view str, ParserT&& parser, RuntimeT& runtime, ResultT& result, std::string& err )
+    bool Parse( std::string_view str, unsigned offset, ParserT&& parser, RuntimeT& runtime, ResultT& result, std::string& err )
     {
         using boost::spirit::x3::with;
         using boost::spirit::x3::ascii::space_type;
-        using runtime::PartialParseAction;
         using runtime::runtime_tag;
-        using runtime::partial_parse_action_tag;
-
-        PartialParseAction parseAction{};
 
         auto&& exec = with<runtime_tag>( std::ref( runtime ) )[
-            with<partial_parse_action_tag>( std::ref( parseAction ) )[
+            with<line_begin_tag>(str.begin()) [
                 parser
             ]
         ];
@@ -28,7 +24,7 @@ namespace runtime
         space_type space;
 
         bool r = false;
-        auto cur = str.begin();
+        auto cur = str.begin() + offset;
         const auto end = str.end();
         err.clear();
 
@@ -36,17 +32,14 @@ namespace runtime
         {
             for( ;; )
             {
-                parseAction = PartialParseAction::Undefined;
                 r = phrase_parse( cur, end, exec, space, result );
 
                 if( !r || cur == end )
                     break;
 
-                if( parseAction != PartialParseAction::Continue )
+                if( !runtime.IsExpectedToContinueLineExecution() )
                 {
-                    if( parseAction == PartialParseAction::Discard )
-                        cur = end;
-
+                    cur = end;
                     break;
                 }
             }
@@ -86,14 +79,22 @@ namespace runtime
         {
             using runtime::value_t;
 
-            runtime.ClearOutput();
-
             value_t res{};
             std::string err{};
+ 
+            runtime.ClearProgram();
+            runtime.AddLine( 100, str );
+            runtime.Start();
 
-            if( !Parse( str, grammar, runtime, res, err ) )
+            for( ;; )
             {
-                return value_t{ std::move( err ) };
+                const auto [pStr, lineNum, offset] = runtime.GetNextLine();
+
+                if( !pStr )
+                    break;
+
+                if( !Parse( *pStr, offset, grammar, runtime, res, err ) )
+                    return value_t{ std::move( err ) };
             }
 
             auto&& strOut = runtime.GetOutput();
