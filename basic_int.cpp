@@ -59,6 +59,8 @@ bool Preparse( const char* szFileName, runtime::Runtime &runtime )
 
 bool Execute( runtime::Runtime& runtime )
 {
+    std::srand(0); //We need the deterministic rand() for automation
+
     for(;;) 
     {
         const auto [pStr, lineNum] = runtime.GetNextLine();
@@ -95,6 +97,19 @@ int main(int argc, char* argv[])
     GetConsoleMode( hConsole, &dwMode );
     SetConsoleMode( hConsole, dwMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING );
 #endif
+    
+    std::cout << "\033[97m" "----------------------------------------------------\n" 
+                            "                    BASIC_INT\n" 
+                            "     basically, a very basic BASIC interpreter\n"
+                            "               Dmitrii Shesterkin 2021\n" 
+                            "----------------------------------------------------\n" "\033[0m";
+
+    if( argc <= 1 )
+    {
+        std::cout << "\nBASIC_INT [FILE [...]]\n\n";
+        std::cout << "  FILE\tBASIC program file. if the file name ends on \".input\"\n"
+                         "  \tits content is used as fake input for the next program\n";
+    }
 
     runtime::Runtime runtime;
 

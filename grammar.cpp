@@ -125,7 +125,7 @@ namespace main_pass
         no_case["dim"] >> omit[lexeme[+char_]] |
         no_case["restore"][restore_stmt_op] |
         no_case["read"] >> var_name[read_stmt_op] |
-        no_case["rem"] >> omit[lexeme[+char_]] |
+        no_case["rem"] >> omit[lexeme[*char_]] |
         no_case["def"] >> no_case["fn"] >> (identifier >> '(' >> identifier >> ')' >> '=' >> lexeme[+~char_(':')])[def_stmt_op] |
         (-no_case["let"] >> var_name >> '=' >> expression)[assing_var_op]
         ;
@@ -150,6 +150,7 @@ namespace main_pass
         no_case["int"] >> single_arg[int_op] |
         no_case["abs"] >> single_arg[abs_op] |
         no_case["left$"] >> double_args[left_op] |
+        no_case["rnd"] >> single_arg[rnd_op] |
         no_case["fn"] >> (identifier >> single_arg) [call_fn_op] |
         var_name[load_var_op]
         ;

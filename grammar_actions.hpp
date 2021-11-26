@@ -149,6 +149,15 @@ namespace actions
         _val( ctx ) = std::fabs( ForceFloat( v ) );
     };
 
+    constexpr auto rnd_op = []( auto& ctx ) {
+        const auto v = ForceFloat(_attr( ctx ));
+
+        if( v <= FLT_EPSILON )
+            throw std::runtime_error("Only positive arguments of RND are supported");
+
+        _val( ctx ) = v * std::rand() / (RAND_MAX + 1);
+    };
+
     constexpr auto print_op = []( auto& ctx )
     {
         auto& runtime = x3::get<runtime_tag>( ctx ).get();
@@ -199,13 +208,13 @@ namespace actions
 
     constexpr auto on_stmt_impl_op = []( auto& ctx ) {
         auto&& v = _attr( ctx );
-        const auto num = (size_t)ForceInt( at_c<0>( v ) );
+        const auto num = ForceInt( at_c<0>( v ) );
         auto&& lines = at_c<1>( v );
 
-        if( num >= lines.size() )
-            throw std::runtime_error( "ON statement incorrect branch" );
+        if( num <= 0 || (size_t)num > lines.size() )
+            throw std::runtime_error( "ON statement incorrect branch #" + std::to_string(num) );
 
-        return lines[num];
+        return lines[num - 1];
     };
 
     constexpr auto on_goto_stmt_op = []( auto& ctx ) {

@@ -64,6 +64,7 @@ BOOST_AUTO_TEST_CASE( expression_test )
     BOOST_TEST( calc( "-12.34" ) == -12.34f );
     BOOST_TEST( calc( "ABS(-12.34)" ) == 12.34f );
     BOOST_TEST( calc( R"(left$("applesoft", 5))" ) == "apple" );
+    BOOST_TEST( calc( R"(rnd(5) >= 0 and rnd(5) < 5)" ) == 1 );
 }
 
 BOOST_AUTO_TEST_CASE( line_parser_test )

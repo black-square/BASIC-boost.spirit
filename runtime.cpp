@@ -136,7 +136,7 @@ value_t Runtime::Load( std::string name ) const
     if( itVar != mVars.end() )
         return itVar->second;
 
-    std::cerr << "\033[91m" "WARNING: Access var before init: " "\033[0m"  << name << std::endl;
+    std::cerr << "\033[93m" "WARNING: Access var before init: "  << name << "\033[0m" << std::endl;
 
     switch( DetectVarType( name ) )
     {
