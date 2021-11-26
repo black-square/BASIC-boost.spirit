@@ -201,7 +201,12 @@ void Runtime::Next( const std::string& varName )
     const int_t eqRes = LessEqImpl( curVal, cur.targetVal );
 
     if( eqRes != 0 )
+    {
+        if( cur.startBodyLine >= mCurLine )
+            throw std::runtime_error("Same line NEXT isn't supported");
+
         Goto( cur.startBodyLine );
+    }
     else
         mForLoopStack.pop_back();
 }

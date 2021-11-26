@@ -1,13 +1,11 @@
 #include "grammar.h"
 #include "runtime.h"
 #include "parse_utils.hpp"
+#include "platform.h"
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <fstream>
 
-#ifdef _WIN32
-    #include <Windows.h>
-#endif
 
 void InteractiveMode()
 {                                            
@@ -91,12 +89,7 @@ int main(int argc, char* argv[])
 
     RunTests(argv[0]);
 
-#ifdef _WIN32
-    const HANDLE hConsole = GetStdHandle( STD_OUTPUT_HANDLE );
-    DWORD dwMode = 0;
-    GetConsoleMode( hConsole, &dwMode );
-    SetConsoleMode( hConsole, dwMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING );
-#endif
+    EnableConsoleColors();
     
     std::cout << "\033[97m" "----------------------------------------------------\n" 
                             "                    BASIC_INT\n" 

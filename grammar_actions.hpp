@@ -1,6 +1,8 @@
 #ifndef BASIC_INT_GRAMMAR_ACTIONS_H
 #define BASIC_INT_GRAMMAR_ACTIONS_H
 
+#include "platform.h"
+
 namespace actions
 {
     using boost::fusion::at_c;
@@ -158,6 +160,12 @@ namespace actions
         _val( ctx ) = v * std::rand() / (RAND_MAX + 1);
     };
 
+    constexpr auto inkey_op = []( auto& ctx ) {       
+        const int key = GetPressedKbKey();
+
+        _val( ctx ) = key != 0 ? std::string( 1, (char)key ) : std::string("");
+    };
+
     constexpr auto print_op = []( auto& ctx )
     {
         auto& runtime = x3::get<runtime_tag>( ctx ).get();
@@ -284,8 +292,6 @@ namespace actions
 
         _val( ctx ) = runtime.CallFuntion( std::move(fncName), std::move(arg) );
     };
-
-
 
     constexpr auto next_stmt_op = []( auto& ctx ) {
         auto&& v = _attr( ctx );

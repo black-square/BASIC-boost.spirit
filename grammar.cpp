@@ -151,6 +151,7 @@ namespace main_pass
         no_case["abs"] >> single_arg[abs_op] |
         no_case["left$"] >> double_args[left_op] |
         no_case["rnd"] >> single_arg[rnd_op] |
+        no_case["inkey$"][inkey_op] |
         no_case["fn"] >> (identifier >> single_arg) [call_fn_op] |
         var_name[load_var_op]
         ;
@@ -232,9 +233,12 @@ namespace preparse
     const auto num_line_def =
         line_num >> lexeme[+char_];
 
+    const auto instruction =
+        no_case["rem"] >> omit[lexeme[*char_]] |
+        data_stmt;
+
     const auto line_def =
-        line_num >> no_case["rem"] >> omit[lexeme[+char_]] |
-        line_num >> data_stmt |
+        line_num >> instruction % ':' |
         num_line[add_num_line_op] |
         eoi;
 
