@@ -131,6 +131,8 @@ namespace runtime
             return mProgramCounter.lineOffset == ProgramCounter::ContinueExecution;
         }
 
+        void PrintVars( std::ostream &os ) const;
+
     private:
         struct ProgramCounter
         {

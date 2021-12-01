@@ -276,6 +276,14 @@
 : DIM A2(10) : A2(1) = 123
 : S = (A2(1.5) = 123) : GOSUB 1
 
+18060 T$ = "Next leads to wrong line": X$=""
+18061 FOR I=1 TO 5
+18063 X$= X$ + "l": IF I=3 THEN 18067
+18065 X$= X$ + "a":GOTO 18069
+18067 X$= X$ + "b"
+18069 NEXT I
+18070 S = (X$ = "lalalblala") : GOSUB 1
+
 18090 T$ = "Line Ordering"
 18092 T = 2
 18091 T = 1

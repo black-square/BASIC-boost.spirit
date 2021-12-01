@@ -198,7 +198,7 @@ std::tuple<const std::string*, linenum_t, unsigned> Runtime::GetNextLine()
         for( unsigned offset = mProgramCounter.lineOffset; offset < it->second.length(); ++offset )
             if( !std::isspace(it->second[offset]) )
             {
-                GotoImpl( {mProgramCounter.line, ProgramCounter::ContinueExecution} );
+                GotoImpl( { it->first, ProgramCounter::ContinueExecution} );
                 return { &it->second, it->first, offset };
             }         
 
@@ -361,6 +361,12 @@ void Runtime::Start()
     //We need the deterministic rand() for automation
     std::srand( 0 );
     mProgramCounter = {};
+}
+
+void Runtime::PrintVars( std::ostream& os ) const
+{
+    for ( auto &v: mVars)
+        os << ' ' << v.first << '=' << v.second;
 }
 
 void Runtime::ClearProgram()

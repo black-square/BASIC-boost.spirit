@@ -5,7 +5,9 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <fstream>
+#include <iomanip>
 
+//#define DEBUG_FULL_EXEC_LOG
 
 void InteractiveMode()
 {                                            
@@ -57,6 +59,10 @@ bool Preparse( const char* szFileName, runtime::Runtime &runtime )
 
 bool Execute( runtime::Runtime& runtime )
 {
+#ifdef DEBUG_FULL_EXEC_LOG
+    std::ofstream flOut( "program.log" );
+#endif
+
     runtime.Start();
 
     for(;;) 
@@ -77,6 +83,15 @@ bool Execute( runtime::Runtime& runtime )
             std::cerr << "-------------------------\n" "\033[0m";
             return false;
         }
+
+#ifdef DEBUG_FULL_EXEC_LOG
+        const std::string_view cmd{ pStr->c_str() + offset, pStr->length() - offset};
+
+        flOut << lineNum << ' ' << cmd;
+        flOut << std::setfill( ' ' ) << std::setw( std::max(80u, cmd.length() + 1) - cmd.length() ) << ' ';
+        runtime.PrintVars( flOut );
+        flOut << std::endl;
+#endif
     }
 }
 
