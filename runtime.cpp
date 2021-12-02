@@ -4,6 +4,7 @@
 
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
+#include "platform.h"
 
 namespace runtime
 {
@@ -225,6 +226,11 @@ void Runtime::AppendToPrevLine( std::string_view str )
     it->second.append( str );
 }
 
+void Runtime::UpdateCurParseLine( linenum_t line )
+{
+    mProgramCounter.line = line;
+}
+
 std::tuple<const std::string*, linenum_t, unsigned> Runtime::GetNextLine()
 {
     decltype(mProgram)::const_iterator it{};
@@ -388,6 +394,21 @@ void Runtime::Input( const std::string& prompt, const std::string& name )
     Store( name, res );
 }
 
+runtime::value_t Runtime::Inkey()
+{
+    if( mFakeInput.empty() )
+    {
+        const int key = GetPressedKbKey();
+        return value_t{ key != 0 ? std::string( 1, (char)key ) : std::string( "" ) };
+    }
+
+    std::string res{ std::move( mFakeInput.front() ) };
+
+    mFakeInput.pop_front();
+
+    return value_t{res};
+}
+
 void Runtime::Read( std::string name )
 {
     if( mCurDataIdx >= mData.size() )
@@ -397,10 +418,15 @@ void Runtime::Read( std::string name )
     ++mCurDataIdx;
 }
 
+void Runtime::AddDataImpl( value_t value )
+{
+    mLineToDataPos.try_emplace( mProgramCounter.line, mData.size() );
+    mData.push_back( std::move(value) );
+}
+
 void Runtime::Start()
 {
-    //We need the deterministic rand() for automation
-    std::srand( 0 );
+    Randomize( (unsigned int)std::time(0) ); 
     mProgramCounter = {};
 }
 
@@ -410,9 +436,36 @@ void Runtime::PrintVars( std::ostream& os ) const
         os << ' ' << v.first << '=' << v.second;
 }
 
+void Runtime::Restore()
+{
+    mCurDataIdx = 0;
+}
+
+void Runtime::Restore( linenum_t line )
+{
+    const auto it = mLineToDataPos.find(line);
+
+    if( it == mLineToDataPos.end() )
+        throw std::runtime_error( "Unknown line " + std::to_string( line ) );
+
+    mCurDataIdx = it->second;
+}
+
+void Runtime::Randomize( unsigned int n )
+{
+    if( !mFakeInput.empty() )
+    {    
+        //We need a deterministic rand() for automation
+        n = 0;
+    }
+
+    std::srand( n );
+}
+
 void Runtime::ClearProgram()
 {
     mProgram.clear();
+    mLineToDataPos.clear();
     mForLoopStack.clear();
     mGosubStack.clear();
     mProgramCounter = {};

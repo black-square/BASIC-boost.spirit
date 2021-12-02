@@ -103,6 +103,7 @@ BOOST_AUTO_TEST_CASE( line_parser_test )
     // "If several statements occur after the THEN, separated by colons, 
     //  then they will be executed if and only if the expression is true."
     BOOST_TEST( calc( R"(if 0 then print "false":print "next")" ) == 0 );
+    BOOST_TEST( calc( R"(DIM A(10, 10): ro = 3: A(3, 10) = 50: IF A(RO,10)<>0 THEN print "test")" ) == "test\n" );
     
     BOOST_TEST( calc( R"(DEF FN A(w) = 2 * W + W: PRINT FN A(23);)" ) == "69" );
     BOOST_TEST( calc( R"(DEF FNB(X) = 4 + 3: G = FNB(23): PRINT G;)" ) == "7" );

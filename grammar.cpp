@@ -34,10 +34,11 @@ namespace main_pass
     x3::rule<class log_and, value_t> const log_and( "log_and" );
     x3::rule<class log_or, value_t> const log_or( "log_or" );
     x3::rule<class double_args, std::tuple<value_t, value_t>> const double_args( "double_args" );
+    x3::rule<class triple_args, std::tuple<value_t, value_t, value_t>> const triple_args( "triple_args" );
     x3::rule<class identifier, std::string> const identifier( "identifier" );
     x3::rule<class var_name, std::string> const var_name( "var_name" );
     x3::rule<class string_lit, std::string> const string_lit( "string_lit" );
-    x3::rule<class instruction, value_t> const instruction( "instruction" );
+    x3::rule<class statement, value_t> const statement( "statement" );
     x3::rule<class line, value_t> const line( "line" );
     x3::rule<class next_stmt, std::string> const next_stmt( "next_stmt" );
     x3::rule<class expression_int, int_t> const expression_int( "expression_int" );
@@ -53,17 +54,20 @@ namespace main_pass
     const auto string_lit_def =
         lexeme['"' >> *~quote >> '"'];
 
-    const auto instruction_end =
+    const auto statement_end =
         ':' | eoi;
 
     const auto line_def =
-        *lit(':') >> instruction;
+        *lit(':') >> statement;
 
     const auto single_arg =
         '(' >> expression >> ')';
 
     const auto double_args_def =
         '(' >> expression >> ',' >> expression >> ')';
+
+    const auto triple_args_def =
+        '(' >> expression >> ',' >> expression >> ',' >> expression >> ')';
 
     const auto print_comma =
         ',' >> attr( value_t{ "\t" } )[print_op];
@@ -77,7 +81,7 @@ namespace main_pass
 
     const auto print_stmt =
         (no_case["print"] >> print_arg >> *(';' >> print_arg) >> (
-            ';' | (&instruction_end >> attr( value_t{ "\n" } )[print_op])
+            ';' | (&statement_end >> attr( value_t{ "\n" } )[print_op])
             )) |
         no_case["print"] >> attr( value_t{ "\n" } )[print_op];
 
@@ -118,7 +122,12 @@ namespace main_pass
         (identifier >> attr( std::vector<int_t>{} ))[dim_stmt_op]
         ;
 
-    const auto instruction_def =
+    const auto restore_stmt = 
+        no_case["restore"] >> line_num [restore_stmt_op] |
+        no_case["restore"] >> attr( MaxLineNum )[restore_stmt_op]
+        ;
+
+    const auto statement_def =
         no_case["text"] |
         no_case["home"] |
         no_case["cls"] |
@@ -134,8 +143,9 @@ namespace main_pass
         next_stmt |
         no_case["end"][end_stmt_op] |
         no_case["dim"] >> var_name_dim % ',' |
-        no_case["restore"][restore_stmt_op] |
+        restore_stmt |
         no_case["read"] >> var_name[read_stmt_op] % ',' |
+        no_case["randomize"] >> expression[randomize_stmt_op] |
         no_case["rem"] >> omit[lexeme[*char_]] |
         no_case["def"] >> no_case["fn"] >> (identifier >> '(' >> identifier >> ')' >> '=' >> lexeme[+~char_(':')])[def_stmt_op] |
         (-no_case["let"] >> var_name >> '=' >> expression)[assing_var_op]
@@ -144,8 +154,7 @@ namespace main_pass
     const auto identifier_def = x3::raw[lexeme[(x3::alpha | '_') >> *(x3::alnum | '_') >> -(lit( '%' ) | '$')]];
 
     const auto var_name_def =
-        identifier[cpy_op] >>
-        char_( '(' )[append_op] >> expression[append_idx_op] % char_( ',' )[append_op] >> char_( ')' )[append_op] |
+        identifier[cpy_op] >> char_( '(' )[append_op] >> expression[append_idx_op] % char_( ',' )[append_op] >> char_( ')' )[append_op] |
         identifier[cpy_op]
         ;
 
@@ -161,6 +170,9 @@ namespace main_pass
         no_case["int"] >> single_arg[int_op] |
         no_case["abs"] >> single_arg[abs_op] |
         no_case["left$"] >> double_args[left_op] |
+        no_case["mid$"] >> triple_args[mid_op] |
+        no_case["len"] >> single_arg[len_op] |
+        no_case["asc"] >> single_arg[asc_op] |
         no_case["rnd"] >> single_arg[rnd_op] |
         no_case["inkey$"][inkey_op] |
         no_case["fn"] >> (identifier >> single_arg) [call_fn_op] |
@@ -205,7 +217,7 @@ namespace main_pass
             );
 
     BOOST_SPIRIT_DEFINE( expression, expression_int, exponent, mult_div, term, add_sub, relational, log_and, log_or,
-                         double_args, identifier, var_name, string_lit, instruction, line, next_stmt
+                         double_args, triple_args, identifier, var_name, string_lit, statement, line, next_stmt
     );
 
     expression_type expression_rule()
@@ -233,8 +245,7 @@ namespace preparse
     using main_pass::string_lit;
 
     x3::rule<class line> const line( "line" );
-    x3::rule<class instruction> const instruction( "instruction" );
-    x3::rule<class num_line, std::tuple<linenum_t, std::string>> const num_line( "num_line" );
+    x3::rule<class statement> const statement( "statement" );
 
     const auto data_stmt =
         no_case["data"] >> (
@@ -243,20 +254,20 @@ namespace preparse
             string_lit[data_op]
             ) % ',';
 
-    const auto instruction_def =
+    const auto statement_def =
         no_case["rem"] >> omit[lexeme[*char_]] |
         data_stmt;
 
-    const auto num_line_def =
-        line_num >> instruction % ':' >> attr(std::string{}) |
-        line_num >> lexeme[+char_];
+    const auto num_line =
+        (line_num[update_cur_line_op] >> statement % ':' >> attr(std::string{}))[add_num_line_op] |
+        (line_num >> lexeme[+char_])[add_num_line_op];
 
     const auto line_def =
-        num_line[add_num_line_op] |
+        num_line |
         ':' >> lexeme[+char_][append_line_op] |
         eoi;
 
-    BOOST_SPIRIT_DEFINE( line, instruction, num_line );
+    BOOST_SPIRIT_DEFINE( line, statement );
 
     line_type line_rule()
     {

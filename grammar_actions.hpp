@@ -1,7 +1,6 @@
 #ifndef BASIC_INT_GRAMMAR_ACTIONS_H
 #define BASIC_INT_GRAMMAR_ACTIONS_H
 
-#include "platform.h"
 #include "runtime.h"
 
 namespace actions
@@ -149,6 +148,36 @@ namespace actions
         _val( ctx ) = ForceStr( o1 ).substr( 0, ForceInt( o2 ) );
     };
 
+    constexpr auto mid_op = []( auto& ctx ) {
+        auto&& [o1, o2, o3] = _attr( ctx );
+        auto &&str = ForceStr( o1 );
+        auto &&pos = ForceInt( o2 );
+        auto &&count = ForceInt( o3 );
+
+        if( pos < 0 || static_cast<size_t>(pos) > str.size() )
+        {
+            _val( ctx ) =  std::string{};
+            return;
+        }
+
+        _val( ctx ) = str.substr( pos, count );
+    };
+
+    constexpr auto len_op = []( auto& ctx ) {
+        auto&& arg = _attr( ctx );
+        _val( ctx ) = static_cast<int_t>( ForceStr( arg ).length() );
+    };
+
+    constexpr auto asc_op = []( auto& ctx ) {
+        auto&& arg = _attr( ctx );
+        auto && s = ForceStr( arg );
+
+        if( s.empty() )
+            throw std::runtime_error( "Illegal ASC() call" );
+
+        _val( ctx ) = int_t{ s[0] };
+    };
+
     constexpr auto sqr_op = []( auto& ctx ) {
         const auto& v = _attr( ctx );
         _val( ctx ) = std::sqrt( ForceFloat( v ) );
@@ -178,10 +207,9 @@ namespace actions
         _val( ctx ) = v * std::rand() / (RAND_MAX + 1);
     };
 
-    constexpr auto inkey_op = []( auto& ctx ) {       
-        const int key = GetPressedKbKey();
-
-        _val( ctx ) = key != 0 ? std::string( 1, (char)key ) : std::string("");
+    constexpr auto inkey_op = []( auto& ctx ) { 
+        auto& runtime = x3::get<runtime_tag>( ctx ).get();
+        _val( ctx ) = runtime.Inkey();
     };
 
     constexpr auto print_op = []( auto& ctx )
@@ -216,6 +244,12 @@ namespace actions
         auto&& name = _attr( ctx );
         auto& runtime = x3::get<runtime_tag>( ctx ).get();
         runtime.Read( std::move( name ) );
+    };
+    
+    constexpr auto randomize_stmt_op = []( auto& ctx ) {
+        auto&& val = _attr( ctx );
+        auto& runtime = x3::get<runtime_tag>( ctx ).get();
+        runtime.Randomize( ForceInt(val) );
     };
 
     constexpr auto if_stmt_op = []( auto& ctx ) {
@@ -277,8 +311,12 @@ namespace actions
 
     constexpr auto restore_stmt_op = []( auto& ctx ) {
         auto& runtime = x3::get<runtime_tag>( ctx ).get();
+        auto&& gotoLine = _attr( ctx );
 
-        runtime.Restore();
+        if( gotoLine == MaxLineNum )
+            runtime.Restore();
+        else
+            runtime.Restore( gotoLine );
     };
 
     constexpr auto gosub_stmt_op = []( auto& ctx ) {
@@ -354,7 +392,9 @@ namespace actions
     constexpr auto add_num_line_op = []( auto& ctx )
     {
         auto& runtime = x3::get<runtime_tag>( ctx ).get();
-        auto&& [line, str] = _attr( ctx );
+        auto&& v = _attr( ctx );
+        auto&& line = at_c<0>( v );
+        auto&& str = at_c<1>( v );
 
         runtime.AddLine( line, str );
     };
@@ -365,6 +405,14 @@ namespace actions
         auto&& str = _attr( ctx );
 
         runtime.AppendToPrevLine( str );
+    };      
+    
+    constexpr auto update_cur_line_op = []( auto& ctx )
+    {
+        auto& runtime = x3::get<runtime_tag>( ctx ).get();
+        auto&& line = _attr( ctx );
+
+        runtime.UpdateCurParseLine( line );
     };
 
     constexpr auto data_op = []( auto& ctx )

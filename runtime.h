@@ -4,6 +4,7 @@
 #include <string>
 #include <map>
 #include <deque>
+#include <unordered_map>
 #include <iostream>
 #include <sstream>
 
@@ -50,6 +51,7 @@ namespace runtime
 
         void AddLine( linenum_t line, std::string_view str );
         void AppendToPrevLine( std::string_view str );
+        void UpdateCurParseLine( linenum_t line );
 
         std::tuple<const std::string*, linenum_t, unsigned> GetNextLine();
 
@@ -95,6 +97,8 @@ namespace runtime
 
         void Input( const std::string& prompt, const std::string& name );
 
+        value_t Inkey();
+
         void AddFakeInput( std::string str )
         {
             mFakeInput.push_back( std::move( str ) );
@@ -102,25 +106,26 @@ namespace runtime
 
         void AddData( int v )
         {
-            mData.push_back( value_t{ static_cast<int_t>(v) } );
+            AddDataImpl( value_t{ static_cast<int_t>(v) } );
         }
 
         void AddData( float v )
         {
-            mData.push_back( value_t{ float_t{v} } );
+            AddDataImpl( value_t{ float_t{v} } );
         }
 
         void AddData( str_t v )
         {
-            mData.push_back( value_t{ std::move( v ) } );
+            AddDataImpl( value_t{ std::move( v ) } );
         }
 
         void Read( std::string name );
 
-        void Restore()
-        {
-            mCurDataIdx = 0;
-        }
+        void Restore();
+
+        void Restore( linenum_t line );
+
+        void Randomize( unsigned int n );
 
         void ClearProgram();
         
@@ -167,6 +172,7 @@ namespace runtime
         }
 
         bool NextImpl( std::string varName );
+        void AddDataImpl( value_t value ); 
 
         static ValueType DetectVarType( std::string_view name );
         static value_t GetDefaultValue( std::string_view name );
@@ -175,13 +181,13 @@ namespace runtime
         std::unordered_map<std::string, value_t> mVars;
         std::map<std::string, FunctionInfo, std::less<>> mFunctions;
         std::map<linenum_t, std::string> mProgram;
+        std::unordered_map<linenum_t, size_t> mLineToDataPos;
         std::vector<ForLoopItem> mForLoopStack;
         std::vector<ProgramCounter> mGosubStack;
         std::deque<std::string> mFakeInput;
         ProgramCounter mProgramCounter = {};
         std::vector<value_t> mData;
         size_t mCurDataIdx = 0;
-
     };
 
     class FunctionRuntime
@@ -194,6 +200,11 @@ namespace runtime
             return mRootRuntime.CallFuntion( std::move(fncName), std::move(arg) );
         }
 
+        value_t Inkey()
+        {
+            return value_t{};
+        }
+        
         bool IsExpectedToContinueLineExecution() const
         {
             return true;
