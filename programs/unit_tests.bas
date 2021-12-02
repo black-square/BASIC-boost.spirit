@@ -1,4 +1,4 @@
-0 F = 0: te = 0: TS = 0: GOTO 100
+0 DIM F, TE, TS: GOTO 100
 
 1 REM LET T$ = "test desc" : LET S = 0 OR 1 : GOSUB 1
 2 IF S THEN PRINT ".";

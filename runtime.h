@@ -53,6 +53,8 @@ namespace runtime
 
         std::tuple<const std::string*, linenum_t, unsigned> GetNextLine();
 
+        void Dim( std::string baseVarName, const std::vector<int_t> &dimentions );
+
         void Goto( linenum_t line );
 
         void GotoNextLine()
@@ -166,7 +168,8 @@ namespace runtime
 
         bool NextImpl( std::string varName );
 
-        static ValueType DetectVarType( std::string_view str );
+        static ValueType DetectVarType( std::string_view name );
+        static value_t GetDefaultValue( std::string_view name );
 
     private:
         std::unordered_map<std::string, value_t> mVars;
@@ -240,6 +243,37 @@ namespace runtime
 
         std::stringstream mStrOut;
     };
+
+    template<class RangeT, class OutputFncT>
+    void ListAllArrayElements( const RangeT & dimensions, OutputFncT && out )
+    {
+        std::vector<RangeT::value_type> curIndex;
+
+        curIndex.reserve( curIndex.size() );
+        curIndex.push_back( 0 );
+
+        for(;;)
+        {
+            if( curIndex.back() > dimensions[curIndex.size() - 1] )
+            {
+                curIndex.pop_back();
+
+                if( curIndex.empty() )
+                    break;
+
+                ++curIndex.back();
+            }
+            else if( curIndex.size() < dimensions.size() )
+            {
+                curIndex.push_back( 0 );
+            }
+            else
+            {
+                out( curIndex );
+                ++curIndex.back();
+            }
+        }
+    }
 }
 
 

@@ -138,19 +138,45 @@ value_t Runtime::Load( std::string name ) const
 
     std::cerr << "\033[93m" "WARNING: Access var before init: "  << name << "\033[0m" << std::endl;
 
-    switch( DetectVarType( name ) )
-    {
-    case ValueType::Str:
-        return value_t{ str_t{} };
+    const auto val = GetDefaultValue( name );
 
-    default:
-        return value_t{ int_t{} };
-    };
+    //Store( std::move(name), val );
+    return val;
 }
 
-ValueType Runtime::DetectVarType( std::string_view str )
+void Runtime::Dim( std::string baseVarName, const std::vector<int_t>& dimentions )
 {
-    for( char c : str )
+    if( dimentions.empty() )
+    {
+        const auto val = GetDefaultValue( baseVarName );
+        Store( std::move(baseVarName), val );
+        return;
+    }
+
+    ListAllArrayElements(dimentions, [baseVarName = std::move(baseVarName), this]( const auto &indices ) {
+        std::string varName{ baseVarName };
+
+        varName += '(';
+
+        for( auto i: indices)
+        {
+            varName += std::to_string(i);
+            varName += ',';
+        }
+
+        varName.back() = ')';
+
+        const auto val = GetDefaultValue( baseVarName );
+        Store( std::move(varName), val );
+    });
+}
+
+ValueType Runtime::DetectVarType( std::string_view name )
+{
+    if( name.empty() )
+        throw std::runtime_error( "variable name cannot be empty" );
+
+    for( char c : name )
     {
         switch( c )
         {
@@ -161,6 +187,21 @@ ValueType Runtime::DetectVarType( std::string_view str )
     }
 
     return ValueType::Float;
+}
+
+value_t Runtime::GetDefaultValue( std::string_view name )
+{
+    switch( DetectVarType( name ) )
+    {
+    case ValueType::Str:
+        return value_t{ str_t{} };
+
+    case ValueType::Float:
+        return value_t{ float_t{} };
+
+    default:
+        return value_t{ int_t{} };
+    };
 }
 
 void Runtime::AddLine( linenum_t line, std::string_view str )

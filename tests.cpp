@@ -112,6 +112,34 @@ BOOST_AUTO_TEST_CASE( line_parser_test )
     BOOST_TEST( calc( R"(print "before": for i=1 to 3: print "body": next:print "after")" ) == "before\nbody\nbody\nbody\nafter\n" );
 }
 
+BOOST_AUTO_TEST_CASE( ListAllArrayElements )
+{
+    static constexpr auto calc = []( std::vector<runtime::int_t> dimensions )
+    {
+        int num = 0;
+        runtime::ListAllArrayElements( dimensions, [&num, &dimensions](const auto & indices )
+        { 
+            BOOST_TEST( indices.size() == dimensions.size() );
+
+            for( int i = 0; i != indices.size(); ++i )
+            {
+                BOOST_TEST( indices[i] >= 0 );
+                BOOST_TEST( indices[i] <= dimensions[i] );
+            }
+                
+            ++num; 
+        });
+
+        return num;
+    };
+
+    BOOST_TEST( calc({2}) == 3 );
+    BOOST_TEST( calc({2, 3}) == 12 );
+    BOOST_TEST( calc({2, 3, 4}) == 60 );
+    BOOST_TEST( calc({2, 3, 4, 5}) == 360 );
+    BOOST_TEST( calc({0, 0, 0}) == 1 );
+    BOOST_TEST( calc({2, 0, 4}) == 15 );
+}
 
 void RunTests( const char *szPath)
 {

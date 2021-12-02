@@ -43,6 +43,11 @@ namespace actions
         _val( ctx ) = static_cast<int_t>(_attr( ctx ));
     };
 
+    constexpr auto force_int_op = []( auto& ctx )
+    {
+        _val( ctx ) = ForceInt(_attr( ctx ));
+    };
+   
     constexpr auto eq_op = []( auto& ctx )
     {
         auto& op1 = _val( ctx );
@@ -327,6 +332,15 @@ namespace actions
         auto&& v = _attr( ctx );
         auto& runtime = x3::get<runtime_tag>( ctx ).get();
         runtime.Next( std::move(v) );
+    };
+
+    constexpr auto dim_stmt_op = []( auto& ctx ) {
+        auto&& v = _attr( ctx );
+        auto&& varName = at_c<0>( v );
+        auto&& dimension = at_c<1>( v );
+
+        auto& runtime = x3::get<runtime_tag>( ctx ).get();
+        runtime.Dim( std::move(varName), std::move( dimension) );
     };
 
     constexpr auto input_op = []( auto& ctx ) {

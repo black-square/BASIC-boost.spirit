@@ -40,9 +40,13 @@ namespace main_pass
     x3::rule<class instruction, value_t> const instruction( "instruction" );
     x3::rule<class line, value_t> const line( "line" );
     x3::rule<class next_stmt, std::string> const next_stmt( "next_stmt" );
+    x3::rule<class expression_int, int_t> const expression_int( "expression_int" );
 
     const auto expression_def =
         log_or;
+
+    const auto expression_int_def = 
+        expression[force_int_op];
 
     const auto quote = char_( '"' ); //MSVC has problems if we inline it.
 
@@ -109,6 +113,11 @@ namespace main_pass
         (no_case["on"] >> expression >> no_case["gosub"] >> line_num % ',')[on_gosub_stmt_op]
         ;
 
+    const auto var_name_dim =
+        (identifier >> '(' >> expression_int % ',' >> ')')[dim_stmt_op] |
+        (identifier >> attr( std::vector<int_t>{} ))[dim_stmt_op]
+        ;
+
     const auto instruction_def =
         no_case["text"] |
         no_case["home"] |
@@ -124,7 +133,7 @@ namespace main_pass
         for_stmt |
         next_stmt |
         no_case["end"][end_stmt_op] |
-        no_case["dim"] >> omit[lexeme[+char_]] |
+        no_case["dim"] >> var_name_dim % ',' |
         no_case["restore"][restore_stmt_op] |
         no_case["read"] >> var_name[read_stmt_op] % ',' |
         no_case["rem"] >> omit[lexeme[*char_]] |
@@ -195,7 +204,7 @@ namespace main_pass
             no_case["or"] >> log_and[or_op]
             );
 
-    BOOST_SPIRIT_DEFINE( expression, exponent, mult_div, term, add_sub, relational, log_and, log_or,
+    BOOST_SPIRIT_DEFINE( expression, expression_int, exponent, mult_div, term, add_sub, relational, log_and, log_or,
                          double_args, identifier, var_name, string_lit, instruction, line, next_stmt
     );
 
