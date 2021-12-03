@@ -8,34 +8,11 @@
 #include <iostream>
 #include <sstream>
 
-#include "value.hpp"
+#include "value.h"
 
 
 namespace runtime
 {
-    std::ostream& operator<<( std::ostream& os, const value_t& v );
-
-    // "All arithmetic operations are done in floating point.No matter what
-    //  the operands to + , -, *, / , and^ are, they will be converted to floating
-    //  point.The functions SIN, COS, ATN, TAN, SQR, LOG, EXPand RND also
-    //  convert their arguments to floating point and give the result as such."
-    float_t ForceFloat( const value_t& v );
-
-    // "The operators AND, OR, NOT force both operands to be integers between
-    //  -32767 and +32767 before the operation occurs.
-    //  When a number is converted to an integer, it is truncated (rounded down).
-    //  It will perform as if INT function was applied.No automatic conversion is 
-    //  done between strings and numbers"
-    int_t ForceInt( const value_t& v );
-
-    const str_t& ForceStr( const value_t& v );
-
-    value_t AddImpl( const value_t& op1, const value_t& op2 );
-
-    int_t LessEqImpl( const value_t& op1, const value_t& op2 );
-
-    bool ToBoolImpl( const value_t& v );
-
     using linenum_t = unsigned long long;
     constexpr linenum_t MaxLineNum = std::numeric_limits<linenum_t>::max();
 
@@ -220,6 +197,32 @@ namespace runtime
         value_t mVarValue;
     };
 
+    class SkipStatementRuntime
+    {
+        using TStrArg = const std::string&;
+        using TValueArg = const value_t&;
+
+    public:
+        void Store( TStrArg name, TValueArg val ) { /*Nothing*/ }
+        value_t Load( TStrArg name ) const { return value_t{}; }
+        void Dim( TStrArg baseVarName, const std::vector<int_t>& dimentions ) { /*Nothing*/ }
+        void Goto( linenum_t line ) { /*Nothing*/ }
+        void GotoNextLine() { /*Nothing*/ }
+        void Gosub( linenum_t line, unsigned currentLineOffset ) { /*Nothing*/ }
+        void Return() { /*Nothing*/ }
+        void ForLoop( TStrArg varName, TValueArg initVal, TValueArg targetVal, TValueArg stepVal, unsigned currentLineOffset ) { /*Nothing*/ }
+        void Next( const std::vector<std::string> &varNames ) { /*Nothing*/ }
+        void DefineFuntion( TStrArg fncName, TStrArg varName, TStrArg exprStr ) { /*Nothing*/ }
+        value_t CallFuntion( TStrArg fncName, TValueArg arg ) const { return value_t{}; }
+        template<class T> void Print( T&& val ) const { /*Nothing*/ }
+        void Input( TStrArg prompt, TStrArg name ) { /*Nothing*/ }
+        value_t Inkey() { return value_t{}; }
+        void Read( TStrArg name ) { /*Nothing*/ }
+        void Restore() { /*Nothing*/ }
+        void Restore( linenum_t line ) { /*Nothing*/ }
+        void Randomize( unsigned int n ) { /*Nothing*/ }
+    };
+
     class TestRuntime : public runtime::Runtime
     {
     public:
@@ -254,37 +257,6 @@ namespace runtime
 
         std::stringstream mStrOut;
     };
-
-    template<class RangeT, class OutputFncT>
-    void ListAllArrayElements( const RangeT & dimensions, OutputFncT && out )
-    {
-        std::vector<RangeT::value_type> curIndex;
-
-        curIndex.reserve( curIndex.size() );
-        curIndex.push_back( 0 );
-
-        for(;;)
-        {
-            if( curIndex.back() > dimensions[curIndex.size() - 1] )
-            {
-                curIndex.pop_back();
-
-                if( curIndex.empty() )
-                    break;
-
-                ++curIndex.back();
-            }
-            else if( curIndex.size() < dimensions.size() )
-            {
-                curIndex.push_back( 0 );
-            }
-            else
-            {
-                out( curIndex );
-                ++curIndex.back();
-            }
-        }
-    }
 }
 
 

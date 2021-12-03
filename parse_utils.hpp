@@ -68,6 +68,37 @@ namespace runtime
         return true;
     }
 
+    template<class RangeT, class OutputFncT>
+    void ListAllArrayElements( const RangeT& dimensions, OutputFncT&& out )
+    {
+        std::vector<RangeT::value_type> curIndex;
+
+        curIndex.reserve( curIndex.size() );
+        curIndex.push_back( 0 );
+
+        for(;;)
+        {
+            if( curIndex.back() > dimensions[curIndex.size() - 1] )
+            {
+                curIndex.pop_back();
+
+                if( curIndex.empty() )
+                    break;
+
+                ++curIndex.back();
+            }
+            else if( curIndex.size() < dimensions.size() )
+            {
+                curIndex.push_back( 0 );
+            }
+            else
+            {
+                out( curIndex );
+                ++curIndex.back();
+            }
+        }
+    }
+
     template<class GrammarT>
     struct TestExecutor
     {

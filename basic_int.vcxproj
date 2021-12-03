@@ -158,6 +158,7 @@
     <ClCompile Include="platform.cpp" />
     <ClCompile Include="runtime.cpp" />
     <ClCompile Include="tests.cpp" />
+    <ClCompile Include="value.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="grammar.h" />
@@ -165,7 +166,7 @@
     <ClInclude Include="parse_utils.hpp" />
     <ClInclude Include="platform.h" />
     <ClInclude Include="runtime.h" />
-    <ClInclude Include="value.hpp" />
+    <ClInclude Include="value.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

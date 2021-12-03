@@ -27,6 +27,7 @@ namespace main_pass
 
     expression_type const expression( "expression" );
     statement_seq_type const statement_seq( "statement_seq" );
+    statement_type const statement( "statement" );
 
     x3::rule<class mult_div, value_t> const mult_div( "mult_div" );
     x3::rule<class exponent, value_t> const exponent( "exponent" );
@@ -40,7 +41,7 @@ namespace main_pass
     x3::rule<class identifier, std::string> const identifier( "identifier" );
     x3::rule<class var_name, std::string> const var_name( "var_name" );
     x3::rule<class string_lit, std::string> const string_lit( "string_lit" );
-    x3::rule<class statement, value_t> const statement( "statement" );
+    
     x3::rule<class next_stmt, std::string> const next_stmt( "next_stmt" );
     x3::rule<class expression_int, int_t> const expression_int( "expression_int" );
 
@@ -226,6 +227,11 @@ namespace main_pass
         return expression;
     }
 
+    statement_type statement_rule()
+    {
+        return statement;
+    }
+
     statement_seq_type statement_seq_rule()
     {
         return statement_seq;
@@ -296,6 +302,7 @@ namespace main_pass
     BOOST_SPIRIT_INSTANTIATE( expression_type, iterator_type, context_type<runtime::FunctionRuntime> );
     BOOST_SPIRIT_INSTANTIATE( statement_seq_type, iterator_type, context_type<runtime::TestRuntime> );
     BOOST_SPIRIT_INSTANTIATE( statement_seq_type, iterator_type, context_type<runtime::Runtime> );
+    BOOST_SPIRIT_INSTANTIATE( statement_type, iterator_type, context_type<runtime::SkipStatementRuntime> );
 }
 
 namespace preparse
