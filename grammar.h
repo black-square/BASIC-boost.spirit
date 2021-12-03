@@ -14,11 +14,11 @@ namespace main_pass
     using expression_type = x3::rule<class expression, value_t>;
     BOOST_SPIRIT_DECLARE( expression_type );
 
-    using line_type = x3::rule<class line, value_t>;
-    BOOST_SPIRIT_DECLARE( line_type );
+    using statement_seq_type = x3::rule<class statement_seq, value_t>;
+    BOOST_SPIRIT_DECLARE( statement_seq_type );
 
     expression_type expression_rule();
-    line_type line_rule();
+    statement_seq_type statement_seq_rule();
 }
 
 namespace preparse

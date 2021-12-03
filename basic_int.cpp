@@ -15,7 +15,7 @@ void InteractiveMode()
     std::cout << "Interactive mode\n";
     std::cout << "-------------------------\n" "\033[0m";
 
-    runtime::TestExecutor calc{ main_pass::line_rule() };
+    runtime::TestExecutor calc{ main_pass::statement_seq_rule() };
 
     std::string str;
 
@@ -75,7 +75,7 @@ bool Execute( runtime::Runtime& runtime )
         runtime::value_t res{};
         std::string err{};
 
-        if( !runtime::Parse( *pStr, offset, main_pass::line_rule(), runtime, res, err ) )
+        if( !runtime::Parse( *pStr, offset, main_pass::statement_seq_rule(), runtime, res, err ) )
         {
             std::cerr << "\033[91m" "-------------------------\n";
             std::cerr << "Execute failed\n" << lineNum << '\t' << *pStr << "\n";

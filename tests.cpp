@@ -69,7 +69,7 @@ BOOST_AUTO_TEST_CASE( expression_test )
 
 BOOST_AUTO_TEST_CASE( line_parser_test )
 {
-    runtime::TestExecutorClear calc{ main_pass::line_rule() };
+    runtime::TestExecutorClear calc{ main_pass::statement_seq_rule() };
 
     BOOST_TEST( calc( R"(print)" ) == "\n" );
     BOOST_TEST( calc( R"(Print "Hello World!")" ) == "Hello World!\n" );

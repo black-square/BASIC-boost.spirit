@@ -26,6 +26,8 @@ namespace main_pass
     using str_view = boost::iterator_range<std::string_view::const_iterator>;
 
     expression_type const expression( "expression" );
+    statement_seq_type const statement_seq( "statement_seq" );
+
     x3::rule<class mult_div, value_t> const mult_div( "mult_div" );
     x3::rule<class exponent, value_t> const exponent( "exponent" );
     x3::rule<class term, value_t> const term( "term" );
@@ -39,7 +41,6 @@ namespace main_pass
     x3::rule<class var_name, std::string> const var_name( "var_name" );
     x3::rule<class string_lit, std::string> const string_lit( "string_lit" );
     x3::rule<class statement, value_t> const statement( "statement" );
-    x3::rule<class line, value_t> const line( "line" );
     x3::rule<class next_stmt, std::string> const next_stmt( "next_stmt" );
     x3::rule<class expression_int, int_t> const expression_int( "expression_int" );
 
@@ -57,7 +58,7 @@ namespace main_pass
     const auto statement_end =
         ':' | eoi;
 
-    const auto line_def =
+    const auto statement_seq_def =
         *lit(':') >> statement;
 
     const auto single_arg =
@@ -217,7 +218,7 @@ namespace main_pass
             );
 
     BOOST_SPIRIT_DEFINE( expression, expression_int, exponent, mult_div, term, add_sub, relational, log_and, log_or,
-                         double_args, triple_args, identifier, var_name, string_lit, statement, line, next_stmt
+                         double_args, triple_args, identifier, var_name, string_lit, statement, statement_seq, next_stmt
     );
 
     expression_type expression_rule()
@@ -225,9 +226,9 @@ namespace main_pass
         return expression;
     }
 
-    line_type line_rule()
+    statement_seq_type statement_seq_rule()
     {
-        return line;
+        return statement_seq;
     }
 }
 
@@ -244,7 +245,7 @@ namespace preparse
     using main_pass::strict_float;
     using main_pass::string_lit;
 
-    x3::rule<class line> const line( "line" );
+    line_type const line( "line" );
     x3::rule<class statement> const statement( "statement" );
 
     const auto data_stmt =
@@ -293,8 +294,8 @@ namespace main_pass
 {
     BOOST_SPIRIT_INSTANTIATE( expression_type, iterator_type, context_type<runtime::TestRuntime> );
     BOOST_SPIRIT_INSTANTIATE( expression_type, iterator_type, context_type<runtime::FunctionRuntime> );
-    BOOST_SPIRIT_INSTANTIATE( line_type, iterator_type, context_type<runtime::TestRuntime> );
-    BOOST_SPIRIT_INSTANTIATE( line_type, iterator_type, context_type<runtime::Runtime> );
+    BOOST_SPIRIT_INSTANTIATE( statement_seq_type, iterator_type, context_type<runtime::TestRuntime> );
+    BOOST_SPIRIT_INSTANTIATE( statement_seq_type, iterator_type, context_type<runtime::Runtime> );
 }
 
 namespace preparse
