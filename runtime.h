@@ -13,12 +13,18 @@
 
 namespace runtime
 {
-    using linenum_t = unsigned long long;
-    constexpr linenum_t MaxLineNum = std::numeric_limits<linenum_t>::max();
-
     struct line_begin_tag;
-
     struct runtime_tag;
+    struct parse_mode_tag;
+
+    enum class ParseMode
+    {
+        Normal,
+        ParseStatementSkipElse,
+        SkipStatementParseElse,
+        ParseElse,
+        SkipElse
+    };
 
     class Runtime
     {
@@ -117,6 +123,8 @@ namespace runtime
 
         void PrintVars( std::ostream &os ) const;
 
+        static value_t GetDefaultValue( std::string_view name );
+
     private:
         struct ProgramCounter
         {
@@ -152,7 +160,6 @@ namespace runtime
         void AddDataImpl( value_t value ); 
 
         static ValueType DetectVarType( std::string_view name );
-        static value_t GetDefaultValue( std::string_view name );
 
     private:
         std::unordered_map<std::string, value_t> mVars;
@@ -204,7 +211,7 @@ namespace runtime
 
     public:
         void Store( TStrArg name, TValueArg val ) { /*Nothing*/ }
-        value_t Load( TStrArg name ) const { return value_t{}; }
+        value_t Load( TStrArg name ) const { return Runtime::GetDefaultValue(name); }
         void Dim( TStrArg baseVarName, const std::vector<int_t>& dimentions ) { /*Nothing*/ }
         void Goto( linenum_t line ) { /*Nothing*/ }
         void GotoNextLine() { /*Nothing*/ }

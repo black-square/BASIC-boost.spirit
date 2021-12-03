@@ -69,7 +69,7 @@ BOOST_AUTO_TEST_CASE( expression_test )
 
 BOOST_AUTO_TEST_CASE( line_parser_test )
 {
-    runtime::TestExecutorClear calc{ main_pass::statement_seq_rule() };
+    runtime::TestExecutorClear calc{ main_pass::statement_rule() };
 
     BOOST_TEST( calc( R"(print)" ) == "\n" );
     BOOST_TEST( calc( R"(Print "Hello World!")" ) == "Hello World!\n" );
@@ -103,6 +103,9 @@ BOOST_AUTO_TEST_CASE( line_parser_test )
     // "If several statements occur after the THEN, separated by colons, 
     //  then they will be executed if and only if the expression is true."
     BOOST_TEST( calc( R"(if 0 then print "false":print "next")" ) == 0 );
+    BOOST_TEST( calc( R"(if 1 then print "true" else print "false")" ) == "true\n" );
+    BOOST_TEST( calc( R"(if 0 then print "true" else print "false")" ) == "false\n" );
+    BOOST_TEST( calc( R"(if 0 then A$ = A$ + "true":A$ = A$ + "extra": print A$)" ) == 0 );
     BOOST_TEST( calc( R"(DIM A(10, 10): ro = 3: A(3, 10) = 50: IF A(RO,10)<>0 THEN print "test")" ) == "test\n" );
     
     BOOST_TEST( calc( R"(DEF FN A(w) = 2 * W + W: PRINT FN A(23);)" ) == "69" );

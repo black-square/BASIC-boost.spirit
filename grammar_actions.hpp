@@ -258,17 +258,33 @@ namespace actions
         auto&& gotoLine = at_c<1>( v );
         const bool res = ToBoolImpl( cond );
         auto& runtime = x3::get<runtime_tag>( ctx ).get();
+        auto& parseMode = x3::get<parse_mode_tag>( ctx ).get();
 
         if( !res )
         {
-            // "If several statements occur after the THEN, separated by colons, 
-            //  then they will be executed if and only if the expression is true."
-            runtime.GotoNextLine();
+            parseMode = gotoLine == MaxLineNum ?
+                ParseMode::SkipStatementParseElse:
+                ParseMode::ParseElse;
+
             return;
         }
 
-        if( gotoLine != MaxLineNum )
+        if( gotoLine == MaxLineNum )
+            parseMode = ParseMode::ParseStatementSkipElse;
+        else
+        {
             runtime.Goto( gotoLine );
+            
+            //Only needed when `runtime` is the skipping one
+            parseMode = ParseMode::SkipElse;
+        } 
+    };     
+    
+    constexpr auto else_stmt_op = []( auto& ctx ) {
+        auto&& gotoLine = _attr( ctx );
+        auto& runtime = x3::get<runtime_tag>( ctx ).get();
+
+        runtime.Goto( gotoLine );
     };
 
     constexpr auto on_stmt_impl_op = []( auto& ctx ) {
@@ -306,7 +322,7 @@ namespace actions
     };
 
     constexpr auto stop_stmt_op = []( auto& ctx ) {
-        std::exit(100);
+        end_stmt_op(ctx);
     };
 
     constexpr auto restore_stmt_op = []( auto& ctx ) {

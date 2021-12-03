@@ -10,10 +10,10 @@
 101 rem "If several statements occur after the THEN, separated by colons, 
 102 rem  then they will be executed if and only if the expression is true."
 
-110 T$="Inline If": A$=""   
-111 if 0 then A$ = A$ + "true":A$ = A$ + "extra"  
+110 T$="Inline If"   
+111 A$="": if 0 then A$ = A$ + "true":A$ = A$ + "extra"  
 112 S = (A$ = ""):   GOSUB 1  
-113 if 1 then A$ = A$ + "true":A$ = A$ + "extra"
+113 A$="": if 1 then A$ = A$ + "true":A$ = A$ + "extra"
 114 S = (A$ = "trueextra"): GOSUB 1   
 
 120 T$="Inline For": A$=""  
@@ -30,6 +30,14 @@
 141 A$ = A$ + "a" : goto 142 : A$ = A$ + "c"
 142 A$ = A$ + "b"
 143 S = (A$ = "ab"): GOSUB 1
+
+150 rem If ELSE is present the line won't be discarded
+
+151 T$="Inline If Else"   
+152 A$="": if 0 then A$ = A$ + "true" else A$ = A$ + "false":A$ = A$ + "extra"  
+153 S = (A$ = "falseextra"): GOSUB 1
+154 A$="": if 1 then A$ = A$ + "true" else A$ = A$ + "false":A$ = A$ + "extra"
+155 S = (A$ = "trueextra"): GOSUB 1 
 
 1000 PRINT : PRINT "Variable Control ";
 
@@ -129,6 +137,30 @@
 2210 T$ = "Non-Empty String is True"
 : T = 1 : IF "abc" THEN T = 2
 2211 S = (T=2) : GOSUB 1
+
+2220 T$ = "IF ELSE"
+: T = 1 : IF 0 THEN T = 2 ELSE T = 3
+2221 S = (T=3) : GOSUB 1
+: T = 1 : IF 1 THEN T = 2 ELSE T = 3
+2222 S = (T=2) : GOSUB 1
+
+2230 T$ = "IF line ELSE line": T = 0
+2231 IF 1 THEN 2232 ELSE 2233: T = T + 100
+2232 T = T + 1: goto 2234
+2233 T = T + 2: goto 2234
+2234 S = (T = 1) : GOSUB 1
+
+2240 T$ = "IF line ELSE line 2": T = 0
+2241 IF 0 THEN 2242 ELSE 2243: T = T + 100
+2242 T = T + 1: goto 2244
+2243 T = T + 2: goto 2244
+2244 S = (T = 2) : GOSUB 1
+
+2250 T$ = "IF ELSE IF": Y = 10: goto 2252
+2251 A$= "": IF X>Y THEN A$="GREATER" ELSE IF Y>X THEN A$="LESS" ELSE A$="EQUAL": RETURN
+2252 X = 1: gosub 2251: S = (A$ = "LESS") : GOSUB 1
+2253 X = 20: gosub 2251: S = (A$ = "GREATER") : GOSUB 1
+2254 X = 10: gosub 2251: S = (A$ = "EQUAL") : GOSUB 1
 
 5000 PRINT : PRINT "Miscellaneous ";
 
@@ -283,6 +315,10 @@
 18067 X$= X$ + "b"
 18069 NEXT I
 18070 S = (X$ = "lalalblala") : GOSUB 1
+
+18080 T$ = "ELSE IF"
+18081 ST = 3: IF ST<1 THEN ST=0 ELSE IF 1>.84 THEN ST=ST-1
+18082 S = (ST = 2) : GOSUB 1
 
 18090 T$ = "Line Ordering"
 18092 T = 2

@@ -401,7 +401,12 @@ value_t FunctionRuntime::Calculate( const Runtime& rootRuntime, std::string_view
     std::string err{};
     value_t res;
 
-    if( !Parse( exprStr, 0, main_pass::expression_rule(), runtime, res, err ) )
+    const auto parseFnc = [&runtime, &res]( auto& args )
+    {
+        return phrase_parse( args.cur, args.end, args.MakeFullParser(runtime, main_pass::expression_rule()), args.spaceParser, res );
+    };
+
+    if( !ParseSingle( exprStr, 0, err, parseFnc ) )
     {
         std::cerr << "\033[91m" "-------------------------\n";
         std::cerr << "Function execution failed\n" << exprStr << "\n";

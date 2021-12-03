@@ -17,12 +17,16 @@ namespace main_pass
     using statement_type = x3::rule<class statement, value_t>;
     BOOST_SPIRIT_DECLARE( statement_type );
 
-    using statement_seq_type = x3::rule<class statement_seq, value_t>;
-    BOOST_SPIRIT_DECLARE( statement_seq_type );
+    using else_statement_type = x3::rule<class else_statement>;
+    BOOST_SPIRIT_DECLARE( else_statement_type );
+
+    using sequence_separator_type = x3::rule<class sequence_separator>;
+    BOOST_SPIRIT_DECLARE( sequence_separator_type );
 
     expression_type expression_rule();
     statement_type statement_rule();
-    statement_seq_type statement_seq_rule();
+    else_statement_type else_statement_rule();
+    sequence_separator_type sequence_separator_rule();
 }
 
 namespace preparse

@@ -9,6 +9,9 @@ namespace runtime
     using float_t = float;
     using int_t = int16_t;
     using str_t = std::string;
+    using linenum_t = unsigned long long;
+
+    constexpr linenum_t MaxLineNum = std::numeric_limits<linenum_t>::max();
 
     struct value_t : boost::spirit::x3::variant<
         int_t,

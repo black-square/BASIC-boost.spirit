@@ -26,8 +26,9 @@ namespace main_pass
     using str_view = boost::iterator_range<std::string_view::const_iterator>;
 
     expression_type const expression( "expression" );
-    statement_seq_type const statement_seq( "statement_seq" );
+    sequence_separator_type const sequence_separator( "sequence_separator" );
     statement_type const statement( "statement" );
+    else_statement_type const else_statement( "else_statement" );
 
     x3::rule<class mult_div, value_t> const mult_div( "mult_div" );
     x3::rule<class exponent, value_t> const exponent( "exponent" );
@@ -57,10 +58,10 @@ namespace main_pass
         lexeme['"' >> *~quote >> '"'];
 
     const auto statement_end =
-        ':' | eoi;
+        ':' | no_case["else"] | eoi;
 
-    const auto statement_seq_def =
-        *lit(':') >> statement;
+    const auto sequence_separator_def =
+        +lit( ':' );
 
     const auto single_arg =
         '(' >> expression >> ')';
@@ -110,9 +111,12 @@ namespace main_pass
     //  https://github.com/boostorg/spirit/issues/378
     //  https://stackoverflow.com/a/49309385/3415353  
     const auto if_stmt =
-        (no_case["if"] >> expression >> no_case["then"] >> line_num)[if_stmt_op] |
-        (no_case["if"] >> expression >> -no_case["then"] >> attr( MaxLineNum ))[if_stmt_op]
+        (no_case["if"] >> expression >> (no_case["then"] | no_case["goto"]) >> line_num)[if_stmt_op] |
+        (no_case["if"] >> expression >> -no_case["then"] >> attr(MaxLineNum))[if_stmt_op]
         ;
+
+    const auto else_statement_def =
+        no_case["else"] >> -line_num[else_stmt_op];
 
     const auto on_stmt =
         (no_case["on"] >> expression >> no_case["goto"] >> line_num % ',')[on_goto_stmt_op] |
@@ -153,7 +157,9 @@ namespace main_pass
         (-no_case["let"] >> var_name >> '=' >> expression)[assing_var_op]
         ;
 
-    const auto identifier_def = x3::raw[lexeme[(x3::alpha | '_') >> *(x3::alnum | '_') >> -(lit( '%' ) | '$')]];
+    // Technically, we should exclude all keywords here, but only ELSE is necessary due to 
+    // the crazy PRINT syntax that allows multiple statements not divided by any separator 
+    const auto identifier_def = !lit( "else" ) >> x3::raw[lexeme[(x3::alpha | '_') >> *(x3::alnum | '_') >> -(lit( '%' ) | '$')]];
 
     const auto var_name_def =
         identifier[cpy_op] >> char_( '(' )[append_op] >> expression[append_idx_op] % char_( ',' )[append_op] >> char_( ')' )[append_op] |
@@ -219,7 +225,7 @@ namespace main_pass
             );
 
     BOOST_SPIRIT_DEFINE( expression, expression_int, exponent, mult_div, term, add_sub, relational, log_and, log_or,
-                         double_args, triple_args, identifier, var_name, string_lit, statement, statement_seq, next_stmt
+                         double_args, triple_args, identifier, var_name, string_lit, statement, else_statement, sequence_separator, next_stmt
     );
 
     expression_type expression_rule()
@@ -232,9 +238,14 @@ namespace main_pass
         return statement;
     }
 
-    statement_seq_type statement_seq_rule()
+    else_statement_type else_statement_rule()
     {
-        return statement_seq;
+        return else_statement;
+    }
+
+    sequence_separator_type sequence_separator_rule()
+    {
+        return sequence_separator;
     }
 }
 
@@ -285,14 +296,17 @@ namespace preparse
 namespace x3 = boost::spirit::x3;
 
 using iterator_type = std::string_view::const_iterator;
-using phrase_context_type = x3::phrase_parse_context<x3::ascii::space_type>::type;
+using simple_context_type = x3::phrase_parse_context<x3::ascii::space_type>::type;
 
 template<class RuntimeT>
 using context_type = x3::context<
-    line_begin_tag, iterator_type,  
-        x3::context<
-            runtime_tag, std::reference_wrapper<RuntimeT>,
-            phrase_context_type
+    parse_mode_tag, std::reference_wrapper<runtime::ParseMode>,
+    x3::context <
+        line_begin_tag, iterator_type,  
+            x3::context<
+                runtime_tag, std::reference_wrapper<RuntimeT>,
+                simple_context_type
+            >
         >
     >;
  
@@ -300,9 +314,13 @@ namespace main_pass
 {
     BOOST_SPIRIT_INSTANTIATE( expression_type, iterator_type, context_type<runtime::TestRuntime> );
     BOOST_SPIRIT_INSTANTIATE( expression_type, iterator_type, context_type<runtime::FunctionRuntime> );
-    BOOST_SPIRIT_INSTANTIATE( statement_seq_type, iterator_type, context_type<runtime::TestRuntime> );
-    BOOST_SPIRIT_INSTANTIATE( statement_seq_type, iterator_type, context_type<runtime::Runtime> );
+    BOOST_SPIRIT_INSTANTIATE( statement_type, iterator_type, context_type<runtime::Runtime> );
+    BOOST_SPIRIT_INSTANTIATE( statement_type, iterator_type, context_type<runtime::TestRuntime> );
     BOOST_SPIRIT_INSTANTIATE( statement_type, iterator_type, context_type<runtime::SkipStatementRuntime> );
+    BOOST_SPIRIT_INSTANTIATE( else_statement_type, iterator_type, context_type<runtime::Runtime> );
+    BOOST_SPIRIT_INSTANTIATE( else_statement_type, iterator_type, context_type<runtime::TestRuntime> );
+    BOOST_SPIRIT_INSTANTIATE( else_statement_type, iterator_type, context_type<runtime::SkipStatementRuntime> );
+    BOOST_SPIRIT_INSTANTIATE( sequence_separator_type, iterator_type, simple_context_type );
 }
 
 namespace preparse

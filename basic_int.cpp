@@ -15,7 +15,7 @@ void InteractiveMode()
     std::cout << "Interactive mode\n";
     std::cout << "-------------------------\n" "\033[0m";
 
-    runtime::TestExecutor calc{ main_pass::statement_seq_rule() };
+    runtime::TestExecutor calc{ main_pass::statement_rule() };
 
     std::string str;
 
@@ -43,7 +43,12 @@ bool Preparse( const char* szFileName, runtime::Runtime &runtime )
         boost::spirit::x3::unused_type res{};
         std::string err{};
 
-        if( !runtime::Parse( str, 0, preparse::line_rule(), runtime, res, err ) )
+        const auto parseFnc = [&runtime, &res]( auto& args )
+        {
+            return phrase_parse( args.cur, args.end, args.MakeFullParser(runtime, preparse::line_rule()), args.spaceParser, res );
+        };
+
+        if( !runtime::ParseSingle( str, 0, err, parseFnc ) )
         {
             std::cerr << "\033[91m" "-------------------------\n";
             std::cerr << "Preparse failed\n" << str << "\n";
@@ -75,7 +80,7 @@ bool Execute( runtime::Runtime& runtime )
         runtime::value_t res{};
         std::string err{};
 
-        if( !runtime::Parse( *pStr, offset, main_pass::statement_seq_rule(), runtime, res, err ) )
+        if( !runtime::ParseSequence( *pStr, offset, main_pass::statement_rule(), runtime, res, err ) )
         {
             std::cerr << "\033[91m" "-------------------------\n";
             std::cerr << "Execute failed\n" << lineNum << '\t' << *pStr << "\n";
