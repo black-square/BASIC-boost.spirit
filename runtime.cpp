@@ -35,7 +35,12 @@ void Runtime::Store( std::string name, value_t val )
         res = ForceFloat( val );
     };
 
-    mVars[name] = res;
+    const auto itVar = mVars.find( name );
+
+    if( itVar == mVars.end() && IsArrayVar(name) )
+        std::cerr << "\033[93m" "WARNING: Write array element before DIM: " << name << "\033[0m" << std::endl;
+
+    mVars.insert_or_assign( itVar, std::move(name), std::move(res) );
 }
 
 value_t Runtime::Load( std::string name ) const
@@ -54,16 +59,22 @@ value_t Runtime::Load( std::string name ) const
 
     const auto val = GetDefaultValue( name );
 
-    //Store( std::move(name), val );
+    //Prevents more than one warning about the same var
+    const_cast<Runtime *>(this)->mVars[std::move(name)] = val;
+
     return val;
 }
 
 void Runtime::Dim( std::string baseVarName, const std::vector<int_t>& dimentions )
 {
+    if( baseVarName.empty() )
+        throw std::runtime_error( "variable name cannot be empty" );
+
+    boost::algorithm::to_lower( baseVarName );
+
     if( dimentions.empty() )
     {
-        const auto val = GetDefaultValue( baseVarName );
-        Store( std::move(baseVarName), val );
+        mVars[std::move(baseVarName)] = GetDefaultValue(baseVarName);
         return;
     }
 
@@ -80,8 +91,7 @@ void Runtime::Dim( std::string baseVarName, const std::vector<int_t>& dimentions
 
         varName.back() = ')';
 
-        const auto val = GetDefaultValue( baseVarName );
-        Store( std::move(varName), val );
+        mVars[std::move(varName)] = GetDefaultValue( baseVarName );
     });
 }
 
@@ -101,6 +111,15 @@ ValueType Runtime::DetectVarType( std::string_view name )
     }
 
     return ValueType::Float;
+}
+
+bool Runtime::IsArrayVar( std::string_view name )
+{
+    for( char c : name )
+        if( c == '(' )
+            return true;
+
+    return false;
 }
 
 value_t Runtime::GetDefaultValue( std::string_view name )

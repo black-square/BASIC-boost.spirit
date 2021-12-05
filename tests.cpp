@@ -87,9 +87,9 @@ BOOST_AUTO_TEST_CASE( line_parser_test )
     BOOST_TEST( calc( R"(x% = 12:print x%)" ) == "12\n" );
     BOOST_TEST( calc( R"(x% = 2.5:print x%)" ) == "2\n" );
 
-    BOOST_TEST( calc( R"(a(2+1)=42 : print a(3);)" ) == "42" );
-    BOOST_TEST( calc( R"(n = 3: a(3, 8)=42*2 : print a(n, n*2+2);)" ) == "84" );
-    BOOST_TEST( calc( R"(n = 3: a(2, n*2)=43 : b( a(2,6), 1,2,3) = 400/4 : print b(43, 1,   2, 3);)" ) == "100" );
+    BOOST_TEST( calc( R"(DIM a(10): a(2+1)=42 : print a(3);)" ) == "42" );
+    BOOST_TEST( calc( R"(DIM a(10, 10): n = 3: a(3, 8)=42*2 : print a(n, n*2+2);)" ) == "84" );
+    BOOST_TEST( calc( R"(DIM a(2,6), b(43, 1, 2, 3): n = 3: a(2, n*2)=43 : b( a(2,6), 1,2,3) = 400/4 : print b(43, 1,   2, 3);)" ) == "100" );
 
     BOOST_TEST( calc( R"(if 1=1 then print "OK")" ) == "OK\n" );
     BOOST_TEST( calc( R"(if 0=1 then print "OK")" ) == 0 );

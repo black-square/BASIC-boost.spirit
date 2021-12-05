@@ -160,6 +160,7 @@ namespace runtime
         void AddDataImpl( value_t value ); 
 
         static ValueType DetectVarType( std::string_view name );
+        static bool IsArrayVar( std::string_view name );
 
     private:
         std::unordered_map<std::string, value_t> mVars;
