@@ -1,6 +1,7 @@
 #include "value.h"
 
 #include <boost/algorithm/string/replace.hpp>
+#include <sstream>
 
 namespace runtime
 {
@@ -90,4 +91,17 @@ bool ToBoolImpl( const value_t& v )
 
     return boost::apply_visitor( Impl{}, v );
 }
+
+str_t ToStrImpl( const value_t& v )
+{
+    struct Impl
+    {
+        str_t operator()( float_t v ) const { std::ostringstream os; os << v; return os.str(); }
+        str_t operator()( int_t v ) const { return std::to_string( v ); }
+        str_t operator()( const str_t& v ) const { return v; }
+    };
+
+    return boost::apply_visitor( Impl{}, v );
+}
+
 }

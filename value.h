@@ -62,6 +62,8 @@ namespace runtime
     int_t LessEqImpl( const value_t& op1, const value_t& op2 );
 
     bool ToBoolImpl( const value_t& v );
+
+    str_t ToStrImpl( const value_t& v );
 }
 
 

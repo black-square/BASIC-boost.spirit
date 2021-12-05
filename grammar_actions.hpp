@@ -6,6 +6,9 @@
 namespace actions
 {
     using boost::fusion::at_c;
+    using runtime::str_t;
+    using runtime::int_t;
+    using runtime::float_t;
 
     template< class CtxT >
     auto GetPos( const CtxT &ctx )
@@ -142,25 +145,65 @@ namespace actions
         _val( ctx ) = int_t{ ForceInt( _val( ctx ) ) || ForceInt( _attr( ctx ) ) };
     };
 
+    str_t SubStrImpl( const str_t& str, int_t pos, int_t count = -1 )
+    {
+        --pos;
+
+        if( pos < 0 )
+            pos = 0;
+        else if( static_cast<size_t>(pos) > str.size() )
+            return str_t{};
+
+        return str.substr( pos, count );
+    }
+
     constexpr auto left_op = []( auto& ctx ) {
         auto&& [o1, o2] = _attr( ctx );
+        auto&& str = ForceStr( o1 );
+        auto&& count = ForceInt( o2 );
 
-        _val( ctx ) = ForceStr( o1 ).substr( 0, ForceInt( o2 ) );
+        _val( ctx ) = SubStrImpl( str, 1, count );
     };
-
+    
     constexpr auto mid_op = []( auto& ctx ) {
         auto&& [o1, o2, o3] = _attr( ctx );
-        auto &&str = ForceStr( o1 );
-        auto &&pos = ForceInt( o2 );
-        auto &&count = ForceInt( o3 );
+        auto&& str = ForceStr( o1 );
+        auto&& pos = ForceInt( o2 );
+        auto&& count = ForceInt( o3 );
 
-        if( pos < 0 || static_cast<size_t>(pos) > str.size() )
-        {
-            _val( ctx ) =  std::string{};
-            return;
-        }
+        _val( ctx ) = SubStrImpl( str, pos, count );
+    };
 
-        _val( ctx ) = str.substr( pos, count );
+    constexpr auto mid2_op = []( auto& ctx ) {
+        auto&& [o1, o2] = _attr( ctx );
+        auto&& str = ForceStr( o1 );
+        auto&& pos = ForceInt( o2 );
+
+        _val( ctx ) = SubStrImpl( str, pos );
+    };
+
+    constexpr auto right_op = []( auto& ctx ) {
+        auto&& [o1, o2] = _attr( ctx );
+        auto&& str = ForceStr( o1 );
+        auto&& count = ForceInt( o2 );            
+
+        _val( ctx ) = SubStrImpl( str, static_cast<int_t>(str.length()) - count + 1, count );
+    };
+    
+    constexpr auto str_op = []( auto& ctx ) {
+        auto&& v = _attr( ctx );
+
+        _val( ctx ) = ToStrImpl(v );
+    };
+
+    constexpr auto val_op = []( auto& ctx ) {
+        auto&& arg = _attr( ctx );
+        auto&& s = ForceStr( arg );
+
+        char* ending = nullptr;
+        const float res = std::strtof( s.c_str(), &ending );
+
+        _val( ctx ) = *ending == '\0' ? res : float_t{0};
     };
 
     constexpr auto len_op = []( auto& ctx ) {
@@ -170,12 +213,19 @@ namespace actions
 
     constexpr auto asc_op = []( auto& ctx ) {
         auto&& arg = _attr( ctx );
-        auto && s = ForceStr( arg );
+        auto&& s = ForceStr( arg );
 
         if( s.empty() )
             throw std::runtime_error( "Illegal ASC() call" );
 
         _val( ctx ) = int_t{ s[0] };
+    };    
+    
+    constexpr auto chr_op = []( auto& ctx ) {
+        auto&& arg = _attr( ctx );
+        auto&& ch = ForceInt( arg );
+
+        _val( ctx ) = str_t( 1, static_cast<char>(ch) );
     };
 
     constexpr auto sqr_op = []( auto& ctx ) {

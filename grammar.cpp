@@ -178,9 +178,14 @@ namespace main_pass
         no_case["int"] >> single_arg[int_op] |
         no_case["abs"] >> single_arg[abs_op] |
         no_case["left$"] >> double_args[left_op] |
+        no_case["right$"] >> double_args[right_op] |
         no_case["mid$"] >> triple_args[mid_op] |
+        no_case["mid$"] >> double_args[mid2_op] |
+        no_case["str$"] >> single_arg[str_op] |
+        no_case["val"] >> single_arg[val_op] |
         no_case["len"] >> single_arg[len_op] |
         no_case["asc"] >> single_arg[asc_op] |
+        no_case["chr$"] >> single_arg[chr_op] |
         no_case["rnd"] >> single_arg[rnd_op] |
         no_case["inkey$"][inkey_op] |
         no_case["fn"] >> (identifier >> single_arg) [call_fn_op] |

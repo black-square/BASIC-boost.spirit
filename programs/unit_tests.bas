@@ -64,6 +64,7 @@
 : DEF FN FA(X) = X+X : S = (FN FA(3) = 6) : GOSUB 1
 : DEF FN FB(X) = X*X : S = (FN FB(3) = 9) : GOSUB 1
 
+
 2000 PRINT : PRINT "Flow Control ";
 
 2010 T$ = "GOTO" : T = 1 : GOTO 2017 : T = T + 1
@@ -167,6 +168,8 @@
 5010 T$ = "REM" : T = 1 : REM T = 2 : T = 3
 5011 S = (T=1) : GOSUB 1
 
+
+
 6000 PRINT : PRINT "Inline Data ";
 
 6001 DATA 1,2,3
@@ -204,11 +207,49 @@
 
 11000 PRINT : PRINT "String Functions ";
 
+11010 T$ = "LEN()"
+: S = (LEN("ABC") = 3) : GOSUB 1
+: S = (LEN("") = 0) : GOSUB 1
+
 11020 T$ = "LEFT$()"
 : S = (LEFT$("ABC",0) = "") : GOSUB 1
 : S = (LEFT$("ABC",2) = "AB") : GOSUB 1
 : S = (LEFT$("ABC",4) = "ABC") : GOSUB 1
 
+11030 T$ = "MID$()"
+: S = (MID$("ABCD",2,2) = "BC") : GOSUB 1
+: S = (MID$("ABCD",3)   = "CD") : GOSUB 1
+: S = (MID$("ABCD",4,3) = "D") : GOSUB 1
+
+11040 T$ = "RIGHT$()"
+: S = (RIGHT$("ABC",0) = "") : GOSUB 1
+: S = (RIGHT$("ABC",2) = "BC") : GOSUB 1
+: S = (RIGHT$("ABC",4) = "ABC") : GOSUB 1
+
+
+12000 PRINT : PRINT "Type Conversion Functions ";
+
+12010 T$ = "ASC()"
+: S = (ASC(" ") = 32) : GOSUB 1
+: S = (ASC("A") = 65) : GOSUB 1
+: S = (ASC("z") = 122) : GOSUB 1
+: S = (ASC(CHR$(4)) = 4) : GOSUB 1
+
+12020 T$ = "CHR$()"
+: S = (CHR$(32) = " ") : GOSUB 1
+: S = (CHR$(65) = "A") : GOSUB 1
+: S = (CHR$(122) = "z") : GOSUB 1
+
+12030 T$ = "STR$()"
+: S = (STR$(-1) = "-1") : GOSUB 1
+: S = (STR$(1.5) = "1.5") : GOSUB 1
+: S = (STR$(3.1415) = "3.1415") : GOSUB 1
+: S = (VAL(STR$(3.1415)) = 3.1415) : GOSUB 1
+
+12040 T$ = "VAL()"
+: S = (VAL("-1") = -1) : GOSUB 1
+: S = (VAL("1.5") = 1.5) : GOSUB 1
+: S = (VAL("3.1415") = 3.1415) : GOSUB 1
 14000 PRINT : PRINT "User Defined Functions ";
 
 14010 T$ = "FN A()"
@@ -303,6 +344,14 @@
 18020 T$ = "Operator Associativity"
 : S = (10 / 2 * 5 = 25): GOSUB 1
 : S = (2 ^ 3 ^ 4 = 4096): GOSUB 1
+
+18030 T$ = "VAL() on bad input"
+: S = (VAL("") = 0): GOSUB 1
+: S = (VAL("abc") = 0): GOSUB 1
+
+18040 T$ = "Array Dimensions"
+: DIM A1(10) : X = A1(10)
+: S = (1): GOSUB 1
 
 18050 T$ = "Non-integer Array Indices"
 : DIM A2(10) : A2(1) = 123

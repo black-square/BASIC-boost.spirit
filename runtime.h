@@ -263,7 +263,7 @@ namespace runtime
             mStrOut.str( "" );
         }
 
-        std::stringstream mStrOut;
+        std::ostringstream mStrOut;
     };
 }
 
