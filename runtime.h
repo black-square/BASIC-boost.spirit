@@ -5,7 +5,6 @@
 #include <map>
 #include <deque>
 #include <unordered_map>
-#include <iostream>
 #include <sstream>
 
 #include "value.h"
@@ -72,11 +71,9 @@ namespace runtime
 
         value_t CallFuntion( std::string fncName, value_t arg ) const;
 
-        template<class T>
-        void Print( T&& val ) const
-        {
-            std::cout << val;
-        }
+        void Print( int_t val ) const;
+        void Print( float_t val ) const;
+        void Print( const str_t &val ) const;
 
         void Input( const std::string& prompt, const std::string& name );
 
@@ -161,6 +158,9 @@ namespace runtime
 
         static ValueType DetectVarType( std::string_view name );
         static bool IsArrayVar( std::string_view name );
+
+        template<class T>
+        void PrintNumberImpl( T val ) const;
 
     private:
         std::unordered_map<std::string, value_t> mVars;

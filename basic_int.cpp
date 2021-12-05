@@ -4,6 +4,7 @@
 #include "platform.h"
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <iostream>
 #include <fstream>
 #include <iomanip>
 

@@ -3,6 +3,7 @@
 #include "grammar.h"
 #include "platform.h"
 
+#include <iostream>
 #include <boost/algorithm/string/case_conv.hpp>
 
 namespace runtime
@@ -274,6 +275,33 @@ value_t Runtime::CallFuntion( std::string fncName, value_t arg ) const
     return FunctionRuntime::Calculate( *this, it->second.exprStr, it->second.varName, std::move(arg) );
 }
 
+template<class T>
+inline void Runtime::PrintNumberImpl( T val ) const
+{
+    // "Printed numbers are always followed by a space.
+    //  Positive numbers are preceded by a space.
+    //  Negative numbers are preceded by a minus sign."
+    if( val >= 0 )
+        std::cout << ' ';
+
+    std::cout << val << ' ';
+}
+
+void Runtime::Print( int_t val ) const
+{
+    PrintNumberImpl( val );
+}
+
+void Runtime::Print( float_t val ) const
+{
+    PrintNumberImpl( val );
+}
+
+void Runtime::Print( const str_t& val ) const
+{
+    std::cout << val;
+}
+
 void Runtime::Input( const std::string& prompt, const std::string& name )
 {
     if( name.empty() )
@@ -285,6 +313,11 @@ void Runtime::Input( const std::string& prompt, const std::string& name )
     for( ;; )
     {
         std::cout << prompt;
+
+        if( prompt.empty() || prompt.back() != '?' )
+            std::cout << '?';
+
+        std::cout << ' ';
 
         if( mFakeInput.empty() )
         {
