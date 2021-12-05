@@ -159,7 +159,7 @@ namespace main_pass
 
     // Technically, we should exclude all keywords here, but only ELSE is necessary due to 
     // the crazy PRINT syntax that allows multiple statements not divided by any separator 
-    const auto identifier_def = !lit( "else" ) >> x3::raw[lexeme[(x3::alpha | '_') >> *(x3::alnum | '_') >> -(lit( '%' ) | '$')]];
+    const auto identifier_def = !no_case["else"] >> x3::raw[lexeme[(x3::alpha | '_') >> *(x3::alnum | '_') >> -(lit( '%' ) | '$')]];
 
     const auto var_name_def =
         identifier[cpy_op] >> char_( '(' )[append_op] >> expression[append_idx_op] % char_( ',' )[append_op] >> char_( ')' )[append_op] |

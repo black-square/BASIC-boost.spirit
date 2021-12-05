@@ -110,15 +110,15 @@ namespace runtime
                     break;
 
                 case ParseMode::ParseStatementSkipElse:
-                    stateQueue = { State::ParseStatement, State::SkipElse };
+                    stateQueue.insert( stateQueue.begin(), {State::ParseStatement, State::SkipElse} );
                     break;
 
                 case ParseMode::SkipStatementParseElse:
-                    stateQueue = { State::SkipStatement, State::ParseElse };
+                    stateQueue.insert( stateQueue.begin(), {State::SkipStatement, State::ParseElse} );
                     break;
 
                 case ParseMode::ParseElse:
-                    stateQueue = { State::ParseElse };
+                    stateQueue.insert( stateQueue.begin(), {State::ParseElse} );
                     break;
 
                 case ParseMode::SkipElse:
@@ -141,13 +141,13 @@ namespace runtime
                 case ParseMode::SkipStatementParseElse:
                     [[fallthrough]];
                 case ParseMode::ParseStatementSkipElse:
-                    stateQueue = { State::SkipStatement, State::SkipElse };
+                    stateQueue.insert( stateQueue.begin(), {State::SkipStatement, State::SkipElse} );
                     break;
 
                 case ParseMode::SkipElse:
                     [[fallthrough]];
                 case ParseMode::ParseElse:
-                    stateQueue = { State::SkipElse };
+                    stateQueue.insert( stateQueue.begin(), {State::SkipElse} );
                     break;
 
                 default:
@@ -195,6 +195,10 @@ namespace runtime
                             // We have a false condition of IF and no ELSE, it means we need to skip the rest 
                             // of the line: "If several statements occur after the THEN, separated by colons, 
                             // then they will be executed if and only if the expression is true."
+                            // Overall, the line discarding rule looks like this: if we don't have the same 
+                            // number of IF's and ELSE's following the false condition in the line we need to 
+                            // discard the following statement after ':'. That also includes any nested 
+                            // IF THEN ELSE IF ELSE...
                             runtime.GotoNextLine();
                             args.cur = args.end;
                             return true;
@@ -207,15 +211,13 @@ namespace runtime
                             return true;
                         }
                         
-                        stateQueue = { State::ParseStatement, State::SkipTailSeparator };
+                        stateQueue.insert( stateQueue.begin(), {State::ParseStatement} );
                         break;
 
                     case State::SkipElse:
                         //ELSE could be optional
                         if( phrase_parse( args.cur, args.end, elseStatementSkipper, args.spaceParser ) )
-                            stateQueue = { State::SkipStatement, State::SkipTailSeparator };
-                        else
-                            stateQueue = { State::SkipTailSeparator };
+                            stateQueue.insert( stateQueue.begin(),  {State::SkipStatement} );
 
                         break;
 

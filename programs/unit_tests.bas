@@ -369,10 +369,5 @@
 18081 ST = 3: IF ST<1 THEN ST=0 ELSE IF 1>.84 THEN ST=ST-1
 18082 S = (ST = 2) : GOSUB 1
 
-18090 T$ = "Line Ordering"
-18092 T = 2
-18091 T = 1
-18093 S = (T = 2) : GOSUB 1
-
 20000 PRINT : PRINT : PRINT "Executed tests: "; TE
 20010 if F > 0 then PRINT "Successful tests: "; TS : PRINT "[91mFailed tests: "; F;"[0m":STOP

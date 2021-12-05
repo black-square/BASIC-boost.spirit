@@ -100,6 +100,10 @@ BOOST_AUTO_TEST_CASE( line_parser_test )
     BOOST_TEST( calc( R"(if 2 then if 2 - 1 * 2 then x$ = "OK": print x$;)" ) == 0 );
     BOOST_TEST( calc( R"(if 2 then if 2 - 1 * 3 then x$ = "OK": print x$;)" ) == "OK" );
 
+    BOOST_TEST( calc( R"(BOX = 0:IF BOX=1 THEN IF 1 THEN PRINT "A":print "never")" ) == 0);
+    BOOST_TEST( calc( R"(BOX = 0:IF BOX=1 THEN IF 1 THEN PRINT "A" ELSE PRINT "B":print "never")" ) == 0);
+    BOOST_TEST( calc( R"(BOX = 0:IF BOX=1 THEN IF 1 THEN PRINT "A" ELSE PRINT "B" ELSE PRINT "C":print "never")" ) == "C\nnever\n");
+
     // "If several statements occur after the THEN, separated by colons, 
     //  then they will be executed if and only if the expression is true."
     BOOST_TEST( calc( R"(if 0 then print "false":print "next")" ) == 0 );

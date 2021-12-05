@@ -4,10 +4,12 @@
 #include "platform.h"
 
 #include <iostream>
+#include <fstream>
 #include <boost/algorithm/string/case_conv.hpp>
 
 namespace runtime
 {
+static std::ofstream g_flInputLog;
 
 void Runtime::Store( std::string name, value_t val )
 {
@@ -39,7 +41,7 @@ void Runtime::Store( std::string name, value_t val )
     const auto itVar = mVars.find( name );
 
     if( itVar == mVars.end() && IsArrayVar(name) )
-        std::cerr << "\033[93m" "WARNING: Write array element before DIM: " << name << "\033[0m" << std::endl;
+        std::cerr << "\033[93m" "WARNING: Write array element before DIM: " << name << ", line: " << mProgramCounter.line << "\033[0m" << std::endl;
 
     mVars.insert_or_assign( itVar, std::move(name), std::move(res) );
 }
@@ -56,7 +58,7 @@ value_t Runtime::Load( std::string name ) const
     if( itVar != mVars.end() )
         return itVar->second;
 
-    std::cerr << "\033[93m" "WARNING: Access var before init: "  << name << "\033[0m" << std::endl;
+    std::cerr << "\033[93m" "WARNING: Access var before init: "  << name << ", line: " << mProgramCounter.line << "\033[0m" << std::endl;
 
     const auto val = GetDefaultValue( name );
 
@@ -140,6 +142,9 @@ value_t Runtime::GetDefaultValue( std::string_view name )
 
 void Runtime::AddLine( linenum_t line, std::string_view str )
 {
+    if( !mProgram.empty() && line <= mProgram.rbegin()->first )
+        throw std::runtime_error( "Line is in the wrong order " + std::to_string( line ) );
+
     const auto &[_, success] =  mProgram.emplace( line, str );
 
     if( !success )
@@ -323,6 +328,11 @@ void Runtime::Input( const std::string& prompt, const std::string& name )
         {
             if( !std::getline( std::cin, str ) )
                 throw std::runtime_error( "std::getline() error" );
+
+            if( !g_flInputLog.is_open() )
+                g_flInputLog.open("input.log");
+
+            g_flInputLog << str << std::endl;
         }
         else
         {
