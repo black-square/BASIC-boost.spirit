@@ -401,7 +401,8 @@ void Runtime::AddDataImpl( value_t value )
 
 void Runtime::Start()
 {
-    Randomize( (unsigned int)std::time(0) ); 
+    //We need a deterministic rand() for automation
+    Randomize( mFakeInput.empty() ? (unsigned int)std::time(0): 0 );
     mProgramCounter = {};
 }
 
@@ -428,12 +429,6 @@ void Runtime::Restore( linenum_t line )
 
 void Runtime::Randomize( unsigned int n )
 {
-    if( !mFakeInput.empty() )
-    {    
-        //We need a deterministic rand() for automation
-        n = 0;
-    }
-
     std::srand( n );
 }
 
