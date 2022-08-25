@@ -1,0 +1,1 @@
+@basic_int.exe programs\unit_tests.bas programs\squares.bas programs\bmi_index.input programs\bmi_index.bas programs\prime_sieve.input programs\prime_sieve.bas programs\prime_factors.input programs\prime_factors.bas programs\amazing.input programs\amazing.bas programs\wumpus2.input programs\wumpus2.bas programs\chateau1.input programs\chateau.bas

@@ -152,5 +152,5 @@ BOOST_AUTO_TEST_CASE( ListAllArrayElements )
 void RunTests( const char *szPath)
 {
     const char* rgBootTestArgs[] = { szPath, "--log_level=test_suite" };
-    boost::unit_test::unit_test_main( init_unit_test, std::size( rgBootTestArgs ), const_cast<char**>(rgBootTestArgs) );
+    boost::unit_test::unit_test_main( init_unit_test, (int)std::size( rgBootTestArgs ), const_cast<char**>(rgBootTestArgs) );
 }

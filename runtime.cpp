@@ -5,6 +5,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <string_view>
 #include <boost/algorithm/string/case_conv.hpp>
 
 namespace runtime

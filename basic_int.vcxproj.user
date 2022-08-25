@@ -2,18 +2,18 @@
 <Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>programs\unit_tests.bas programs\squares.bas programs\bmi_index.input programs\bmi_index.bas programs\prime_sieve.input programs\prime_sieve.bas c:\projects\basic_int\programs\prime_factors.input programs\prime_factors.bas programs\amazing.input programs\amazing.bas programs\wumpus2.input programs\wumpus2.bas programs\chateau1.input programs\chateau.bas </LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>programs\unit_tests.bas programs\squares.bas programs\bmi_index.input programs\bmi_index.bas programs\prime_sieve.input programs\prime_sieve.bas programs\prime_factors.input programs\prime_factors.bas programs\amazing.input programs\amazing.bas programs\wumpus2.input programs\wumpus2.bas programs\chateau1.input programs\chateau.bas </LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>programs\unit_tests.bas programs\squares.bas programs\bmi_index.input programs\bmi_index.bas programs\prime_sieve.input programs\prime_sieve.bas c:\projects\basic_int\programs\prime_factors.input programs\prime_factors.bas programs\amazing.input programs\amazing.bas programs\wumpus2.input programs\wumpus2.bas programs\chateau1.input programs\chateau.bas </LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>programs\unit_tests.bas programs\squares.bas programs\bmi_index.input programs\bmi_index.bas programs\prime_sieve.input programs\prime_sieve.bas programs\prime_factors.input programs\prime_factors.bas programs\amazing.input programs\amazing.bas programs\wumpus2.input programs\wumpus2.bas programs\chateau1.input programs\chateau.bas </LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>programs\unit_tests.bas programs\squares.bas programs\bmi_index.input programs\bmi_index.bas programs\prime_sieve.input programs\prime_sieve.bas c:\projects\basic_int\programs\prime_factors.input programs\prime_factors.bas programs\amazing.input programs\amazing.bas programs\wumpus2.input programs\wumpus2.bas programs\chateau1.input programs\chateau.bas </LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>programs\unit_tests.bas programs\squares.bas programs\bmi_index.input programs\bmi_index.bas programs\prime_sieve.input programs\prime_sieve.bas programs\prime_factors.input programs\prime_factors.bas programs\amazing.input programs\amazing.bas programs\wumpus2.input programs\wumpus2.bas programs\chateau1.input programs\chateau.bas </LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>programs\unit_tests.bas programs\squares.bas programs\bmi_index.input programs\bmi_index.bas programs\prime_sieve.input programs\prime_sieve.bas c:\projects\basic_int\programs\prime_factors.input programs\prime_factors.bas programs\amazing.input programs\amazing.bas programs\wumpus2.input programs\wumpus2.bas programs\chateau1.input programs\chateau.bas </LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>programs\unit_tests.bas programs\squares.bas programs\bmi_index.input programs\bmi_index.bas programs\prime_sieve.input programs\prime_sieve.bas programs\prime_factors.input programs\prime_factors.bas programs\amazing.input programs\amazing.bas programs\wumpus2.input programs\wumpus2.bas programs\chateau1.input programs\chateau.bas </LocalDebuggerCommandArguments>
   </PropertyGroup>
 </Project>

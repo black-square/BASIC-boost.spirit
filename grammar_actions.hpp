@@ -14,7 +14,10 @@ namespace actions
     auto GetPos( const CtxT &ctx )
     {
         namespace x3 = boost::spirit::x3;
-        return x3::_where( ctx ).begin() - x3::get<runtime::line_begin_tag>( ctx );
+        const auto res = x3::_where( ctx ).begin() - x3::get<runtime::line_begin_tag>( ctx );
+        assert( res >= 0 );
+
+        return static_cast<unsigned>(res); 
     }
 
     constexpr auto cpy_op = []( auto& ctx )
